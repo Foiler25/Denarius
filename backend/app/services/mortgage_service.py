@@ -8,7 +8,8 @@ from app.schemas.mortgage import AmortizationRow, ExtraPaymentCalcResult
 
 
 def _monthly_payment(principal: Decimal, annual_rate: Decimal, term_months: int) -> Decimal:
-    r = annual_rate / Decimal("12")
+    # annual_rate is a percentage (e.g. 6.5 for 6.5%), so divide by 1200 to get monthly decimal rate
+    r = annual_rate / Decimal("1200")
     if r == 0:
         return principal / Decimal(term_months)
     factor = (1 + r) ** term_months
@@ -24,7 +25,7 @@ def build_amortization_schedule(
 ) -> list[AmortizationRow]:
     standard_payment = _monthly_payment(original_principal, annual_rate, term_months)
     total_payment = standard_payment + extra_payment
-    monthly_rate = annual_rate / Decimal("12")
+    monthly_rate = annual_rate / Decimal("1200")
 
     balance = original_principal
     cumulative_interest = Decimal("0.00")

@@ -1,7 +1,9 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -92,12 +94,27 @@ async def extra_payment_calc(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    account = await _get_account_or_404(account_id, db)
     mortgage = await _get_mortgage_or_404(account_id, db)
+
+    today = date.today()
+    rd = relativedelta(today, mortgage.start_date)
+    months_elapsed = rd.years * 12 + rd.months
+    remaining_months = mortgage.term_months - months_elapsed
+    if remaining_months <= 0:
+        raise HTTPException(status_code=400, detail="Loan term has already elapsed.")
+
+    # Use the actual current balance so the comparison starts from today's position,
+    # not the original loan amount years in the past.
+    current_balance = abs(account.current_balance)
+    if current_balance == 0:
+        raise HTTPException(status_code=400, detail="Loan balance is already zero.")
+
     return calculate_extra_payment_savings(
-        mortgage.original_principal,
+        current_balance,
         mortgage.interest_rate,
-        mortgage.term_months,
-        mortgage.start_date,
+        remaining_months,
+        today,
         data.extra_monthly,
     )
 

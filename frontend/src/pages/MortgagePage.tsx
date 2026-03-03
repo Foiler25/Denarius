@@ -19,23 +19,23 @@ interface Account {
   id: string;
   name: string;
   type: string;
+  current_balance: number;
 }
 
+// Matches MortgageOut from the backend
 interface MortgageData {
   original_principal: number;
-  current_balance: number;
   interest_rate: number;
-  monthly_payment: number;
-  origination_date: string;
   term_months: number;
-  extra_monthly_payment?: number;
-  estimated_payoff_date: string;
+  start_date: string;
+  extra_payment: number;
 }
 
+// Matches AmortizationRow from the backend
 interface AmortizationRow {
   payment_number: number;
   payment_date: string;
-  payment: number;
+  payment_amount: number;
   principal: number;
   interest: number;
   balance: number;
@@ -85,10 +85,13 @@ export default function MortgagePage() {
   const [showAllRows, setShowAllRows] = useState(false);
 
   const { data: mortgage, isLoading: mortLoading, isError: mortError } = useMortgage(accountId);
-  const { data: amortizationData, isLoading: amorLoading } = useAmortization(accountId);
+  // Pass extra_payment=0 so the schedule shows the standard baseline amortization
+  const { data: amortizationData, isLoading: amorLoading } = useAmortization(accountId, 0);
 
   const mortgageInfo: MortgageData | null = mortgage ?? null;
-  const allRows: AmortizationRow[] = amortizationData?.schedule ?? amortizationData ?? [];
+  const allRows: AmortizationRow[] = Array.isArray(amortizationData) ? amortizationData : [];
+  const selectedAccount = (accounts as Account[]).find((a) => a.id === accountId);
+  const standardMonthlyPayment = allRows[0]?.payment_amount;
   const displayedRows = showAllRows ? allRows : allRows.slice(0, 12);
 
   async function handleCalc(e: React.FormEvent) {
@@ -150,11 +153,11 @@ export default function MortgagePage() {
             <StatCard
               label="Original Principal"
               value={formatCurrency(mortgageInfo.original_principal)}
-              sub={`Started ${formatDate(mortgageInfo.origination_date)}`}
+              sub={`Started ${formatDate(mortgageInfo.start_date)}`}
             />
             <StatCard
               label="Current Balance"
-              value={formatCurrency(mortgageInfo.current_balance)}
+              value={selectedAccount ? formatCurrency(selectedAccount.current_balance) : "—"}
               sub={`${mortgageInfo.term_months} month term`}
             />
             <StatCard
@@ -164,10 +167,10 @@ export default function MortgagePage() {
             />
             <StatCard
               label="Monthly Payment"
-              value={formatCurrency(mortgageInfo.monthly_payment)}
+              value={standardMonthlyPayment !== undefined ? formatCurrency(standardMonthlyPayment) : "—"}
               sub={
-                mortgageInfo.estimated_payoff_date
-                  ? `Payoff ~${formatDate(mortgageInfo.estimated_payoff_date)}`
+                allRows.length > 0
+                  ? `Payoff ~${formatDate(allRows[allRows.length - 1].payment_date)}`
                   : undefined
               }
             />
@@ -289,7 +292,7 @@ export default function MortgagePage() {
                         >
                           <td className="px-4 py-2.5 text-muted-foreground">{row.payment_number}</td>
                           <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">{formatDate(row.payment_date)}</td>
-                          <td className="px-4 py-2.5 text-right font-medium">{formatCurrency(row.payment)}</td>
+                          <td className="px-4 py-2.5 text-right font-medium">{formatCurrency(row.payment_amount)}</td>
                           <td className="px-4 py-2.5 text-right text-emerald-700">{formatCurrency(row.principal)}</td>
                           <td className="px-4 py-2.5 text-right text-destructive">{formatCurrency(row.interest)}</td>
                           <td className="px-4 py-2.5 text-right font-semibold">{formatCurrency(row.balance)}</td>
