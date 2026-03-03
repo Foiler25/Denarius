@@ -66,8 +66,8 @@ const emptyForm = (): RecurringFormState => ({
   type: "bill",
   frequency: "monthly",
   start_date: new Date().toISOString().slice(0, 10),
-  account_id: "",
-  category_id: "",
+  account_id: "none",
+  category_id: "none",
   notes: "",
 });
 
@@ -135,8 +135,8 @@ function RecurringTab({
       type: item.type,
       frequency: item.frequency,
       start_date: item.next_due_date,
-      account_id: item.account_id ?? "",
-      category_id: item.category_id ?? "",
+      account_id: item.account_id || "none",
+      category_id: item.category_id || "none",
       notes: item.notes ?? "",
     });
     setFormError(null);
@@ -153,7 +153,12 @@ function RecurringTab({
       setFormError("Valid amount is required."); return;
     }
     try {
-      const payload = { ...form, amount: parseFloat(form.amount) };
+      const payload = {
+        ...form,
+        amount: parseFloat(form.amount),
+        account_id: form.account_id === "none" ? "" : form.account_id,
+        category_id: form.category_id === "none" ? "" : form.category_id,
+      };
       if (editItem && updateRecurring) {
         await updateRecurring.mutateAsync(payload);
       } else {
@@ -296,7 +301,7 @@ function RecurringTab({
                   <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {(accounts as Account[]).map((a) => (
                         <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                       ))}
@@ -308,7 +313,7 @@ function RecurringTab({
                   <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       {(categories as Category[]).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}

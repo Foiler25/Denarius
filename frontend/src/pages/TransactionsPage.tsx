@@ -33,12 +33,12 @@ interface Transaction {
   date: string;
   description: string;
   category_id?: string;
-  category_name?: string;
+  category?: { id: string; name: string; type: string } | null;
   account_id: string;
-  account_name?: string;
+  transfer_account_id?: string | null;
   type: "income" | "expense" | "transfer";
   amount: number;
-  cleared: boolean;
+  is_cleared: boolean;
   notes?: string;
 }
 
@@ -60,6 +60,7 @@ interface TxFormState {
   amount: string;
   type: string;
   account_id: string;
+  transfer_account_id: string;
   category_id: string;
   cleared: boolean;
   notes: string;
@@ -71,7 +72,8 @@ const emptyForm = (): TxFormState => ({
   amount: "",
   type: "expense",
   account_id: "",
-  category_id: "",
+  transfer_account_id: "",
+  category_id: "none",
   cleared: false,
   notes: "",
 });
@@ -128,11 +130,20 @@ export default function TransactionsPage() {
     setFormError(null);
     if (!form.description.trim()) { setFormError("Description is required."); return; }
     if (!form.amount || isNaN(parseFloat(form.amount))) { setFormError("Valid amount is required."); return; }
-    if (!form.account_id) { setFormError("Account is required."); return; }
+    if (!form.account_id) { setFormError("From account is required."); return; }
+    if (form.type === "transfer" && !form.transfer_account_id) { setFormError("To account is required for transfers."); return; }
+    if (form.type === "transfer" && form.transfer_account_id === form.account_id) { setFormError("From and To accounts must be different."); return; }
     try {
       await createTx.mutateAsync({
-        ...form,
+        date: form.date,
+        description: form.description,
         amount: parseFloat(form.amount),
+        type: form.type,
+        account_id: form.account_id,
+        is_cleared: form.cleared,
+        notes: form.notes || null,
+        category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
+        transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
       });
       setAddOpen(false);
       setForm(emptyForm());
@@ -190,7 +201,7 @@ export default function TransactionsPage() {
                   </div>
                   <div className="space-y-1">
                     <Label>Type</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, transfer_account_id: v !== "transfer" ? "" : form.transfer_account_id })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="expense">Expense</SelectItem>
@@ -223,7 +234,7 @@ export default function TransactionsPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>Account</Label>
+                    <Label>{form.type === "transfer" ? "From Account" : "Account"}</Label>
                     <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
                       <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                       <SelectContent>
@@ -234,12 +245,25 @@ export default function TransactionsPage() {
                     </Select>
                   </div>
                 </div>
+                {form.type === "transfer" && (
+                  <div className="space-y-1">
+                    <Label>To Account</Label>
+                    <Select value={form.transfer_account_id} onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        {(accounts as Account[]).filter((a) => a.id !== form.account_id).map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label>Category</Label>
                   <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Uncategorized</SelectItem>
+                      <SelectItem value="none">Uncategorized</SelectItem>
                       {(categories as Category[]).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
@@ -384,6 +408,7 @@ export default function TransactionsPage() {
                     <TransactionRow
                       key={tx.id}
                       tx={tx}
+                      accounts={accounts as Account[]}
                       onDelete={() => { setDeleteId(tx.id); setDeleteOpen(true); }}
                     />
                   ))}
@@ -442,15 +467,16 @@ export default function TransactionsPage() {
   );
 }
 
-function TransactionRow({ tx, onDelete }: { tx: Transaction; onDelete: () => void }) {
+function TransactionRow({ tx, accounts, onDelete }: { tx: Transaction; accounts: Account[]; onDelete: () => void }) {
   const updateTx = useUpdateTransaction(tx.id);
-  const [cleared, setCleared] = useState(tx.cleared);
+  const [cleared, setCleared] = useState(tx.is_cleared);
+  const accountName = accounts.find((a) => a.id === tx.account_id)?.name ?? "—";
 
   async function handleClearedChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newVal = e.target.checked;
     setCleared(newVal);
     try {
-      await updateTx.mutateAsync({ cleared: newVal });
+      await updateTx.mutateAsync({ is_cleared: newVal });
     } catch {
       setCleared(!newVal);
     }
@@ -460,8 +486,8 @@ function TransactionRow({ tx, onDelete }: { tx: Transaction; onDelete: () => voi
     <tr className="border-b last:border-0 hover:bg-muted/30 transition-colors">
       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
       <td className="px-4 py-3 font-medium max-w-[200px] truncate">{tx.description}</td>
-      <td className="px-4 py-3 text-muted-foreground">{tx.category_name ?? "—"}</td>
-      <td className="px-4 py-3 text-muted-foreground">{tx.account_name ?? "—"}</td>
+      <td className="px-4 py-3 text-muted-foreground">{tx.category?.name ?? "—"}</td>
+      <td className="px-4 py-3 text-muted-foreground">{accountName}</td>
       <td className="px-4 py-3">
         <Badge
           variant="outline"

@@ -96,8 +96,7 @@ async def create_transaction(
                 db.add(dest_txn)
 
     await db.commit()
-    await db.refresh(txn)
-    return txn
+    return await _get_or_404(txn.id, db)
 
 
 @router.get("/export")
@@ -162,8 +161,7 @@ async def update_transaction(
     for field, value in data.model_dump(exclude_none=True).items():
         setattr(txn, field, value)
     await db.commit()
-    await db.refresh(txn)
-    return txn
+    return await _get_or_404(txn.id, db)
 
 
 @router.delete("/{transaction_id}", status_code=204)
