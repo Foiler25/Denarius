@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc -l /Users/loofa/Documents/Denarius/frontend/src/pages/*.tsx /Users/loofa/Documents/Denarius/frontend/src/pages/settings/*.tsx)",
+      "Bash(docker compose down -v)",
+      "Bash(docker compose up -d)",
+      "Bash(docker compose up --build -d backup-cron)",
+      "Bash(docker exec denarius-backend-1 pip show bcrypt passlib)",
+      "Bash(docker restart denarius-backend-1)"
+    ]
+  }
+}

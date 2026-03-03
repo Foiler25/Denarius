@@ -1,0 +1,15 @@
+# Development overrides — hot reload, exposed DB port
+# This file is automatically loaded alongside docker-compose.yml in dev
+version: "3.9"
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      ENVIRONMENT: development
+
+  postgres:
+    ports:
+      - "5432:5432"

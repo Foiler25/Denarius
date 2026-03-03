@@ -1,0 +1,3 @@
+cd /Users/loofa/Documents/Denarius
+docker compose up --build -d
+# Open http://localhost:9723 → register your first account (auto-assigned admin)

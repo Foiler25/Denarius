@@ -1,0 +1,110 @@
+from datetime import date, timedelta
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.dependencies import get_current_user, get_db
+from app.models.recurring_item import RecurringItem
+from app.models.transaction import Transaction, TransactionType
+from app.models.user import User
+from app.routers.budgets import _budgets_with_spent
+from app.schemas.dashboard import DashboardSummary, MonthlySpendingSummary
+from app.schemas.transaction import TransactionOut
+from app.services.networth_service import get_current_net_worth
+from app.utils.date_utils import first_of_month
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+@router.get("/summary", response_model=DashboardSummary)
+async def dashboard_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    today = date.today()
+    current_month_start = first_of_month(today)
+    if current_month_start.month == 1:
+        prev_month_start = current_month_start.replace(year=current_month_start.year - 1, month=12)
+    else:
+        prev_month_start = current_month_start.replace(month=current_month_start.month - 1)
+
+    if current_month_start.month == 12:
+        next_month_start = current_month_start.replace(year=current_month_start.year + 1, month=1)
+    else:
+        next_month_start = current_month_start.replace(month=current_month_start.month + 1)
+
+    # Net worth
+    net_worth = await get_current_net_worth(db)
+
+    # Monthly spending
+    curr_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .where(
+            Transaction.type == TransactionType.expense,
+            Transaction.date >= current_month_start,
+            Transaction.date < next_month_start,
+            Transaction.deleted_at == None,
+        )
+    )
+    current_spending = curr_result.scalar() or Decimal("0")
+
+    if current_month_start.month == 12:
+        prev_month_end = current_month_start
+    else:
+        prev_month_end = current_month_start
+
+    prev_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .where(
+            Transaction.type == TransactionType.expense,
+            Transaction.date >= prev_month_start,
+            Transaction.date < current_month_start,
+            Transaction.deleted_at == None,
+        )
+    )
+    prev_spending = prev_result.scalar() or Decimal("0")
+
+    # Budget total for current month
+    budget_items = await _budgets_with_spent(today, db)
+    budget_total = sum(b.amount for b in budget_items)
+    over_budget = [b for b in budget_items if b.is_over_budget]
+
+    # Upcoming bills (next 7 days)
+    cutoff = today + timedelta(days=7)
+    upcoming_result = await db.execute(
+        select(RecurringItem)
+        .where(
+            RecurringItem.is_active == True,
+            RecurringItem.deleted_at == None,
+            RecurringItem.next_due_date <= cutoff,
+        )
+        .order_by(RecurringItem.next_due_date)
+        .limit(10)
+    )
+    from app.routers.recurring import _with_days_until_due
+    upcoming_bills = [_with_days_until_due(item) for item in upcoming_result.scalars().all()]
+
+    # Recent transactions
+    recent_result = await db.execute(
+        select(Transaction)
+        .options(selectinload(Transaction.category))
+        .where(Transaction.deleted_at == None)
+        .order_by(Transaction.date.desc(), Transaction.created_at.desc())
+        .limit(10)
+    )
+    recent_transactions = recent_result.scalars().all()
+
+    return DashboardSummary(
+        net_worth=net_worth,
+        monthly_spending=MonthlySpendingSummary(
+            current_month=current_spending,
+            prev_month=prev_spending,
+            budget_total=budget_total,
+        ),
+        upcoming_bills=upcoming_bills,
+        recent_transactions=recent_transactions,
+        over_budget_alerts=over_budget,
+    )

@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-denarius}
+      POSTGRES_USER: ${POSTGRES_USER:-denarius}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - denarius_db_data:/var/lib/postgresql/data
+    networks:
+      - denarius_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-denarius} -d ${POSTGRES_DB:-denarius}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-denarius}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-denarius}
+      JWT_SECRET: ${JWT_SECRET}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:9723}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
+      POSTGRES_USER: ${POSTGRES_USER:-denarius}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-denarius}
+    volumes:
+      - ./backups:/app/backups
+    networks:
+      - denarius_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/system/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-9723}:80"
+    networks:
+      - denarius_net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backup-cron:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-denarius}
+      POSTGRES_USER: ${POSTGRES_USER:-denarius}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
+    volumes:
+      - ./backups:/backups
+    networks:
+      - denarius_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  denarius_net:
+    driver: bridge
+
+volumes:
+  denarius_db_data:
