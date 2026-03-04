@@ -133,6 +133,7 @@ const ACCOUNT_TYPES = [
 ];
 
 function AccountsTab() {
+  const queryClient = useQueryClient();
   const { data: accounts = [], isLoading, isError } = useAccounts();
   const createAccount = useCreateAccount();
 
@@ -239,6 +240,7 @@ function AccountsTab() {
             } else if (mp.original_principal && mp.interest_rate && mp.term_months && mp.start_date) {
               await api.post(`/accounts/${savedId}/mortgage`, mp);
             }
+            queryClient.invalidateQueries({ queryKey: ["mortgage", savedId] });
           } catch {
             // mortgage save failure is non-fatal
           }
@@ -294,7 +296,6 @@ function AccountsTab() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Balance</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Institution</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -311,7 +312,6 @@ function AccountsTab() {
                     <td className={cn("px-4 py-3 text-right font-semibold", account.current_balance < 0 ? "text-destructive" : "text-foreground")}>
                       {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(account.current_balance)}
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">{account.institution ?? "—"}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(account)}>
@@ -370,7 +370,7 @@ function AccountsTab() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label>Current Balance ($)</Label>
+                  <Label>{form.type === 'property' ? 'Property Value ($)' : 'Current Balance ($)'}</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -380,23 +380,27 @@ function AccountsTab() {
                     required
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label>Institution</Label>
-                  <Input
-                    placeholder="e.g. Chase Bank"
-                    value={form.institution}
-                    onChange={(e) => setForm({ ...form, institution: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label>Account Number (last 4)</Label>
-                  <Input
-                    placeholder="••••1234"
-                    maxLength={20}
-                    value={form.account_number}
-                    onChange={(e) => setForm({ ...form, account_number: e.target.value })}
-                  />
-                </div>
+                {form.type !== 'property' && (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Institution</Label>
+                      <Input
+                        placeholder="e.g. Chase Bank"
+                        value={form.institution}
+                        onChange={(e) => setForm({ ...form, institution: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Account Number (last 4)</Label>
+                      <Input
+                        placeholder="••••1234"
+                        maxLength={20}
+                        value={form.account_number}
+                        onChange={(e) => setForm({ ...form, account_number: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-1 col-span-2">
                   <Label>Notes</Label>
                   <Input

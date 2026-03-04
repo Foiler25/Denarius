@@ -9,16 +9,21 @@ export function useMortgage(accountId: string) {
   });
 }
 
-export function useAmortization(accountId: string, extraPayment?: number) {
+export function useAmortization(
+  accountId: string,
+  extraPayment?: number,
+  enabled = true
+) {
   return useQuery({
     queryKey: ["mortgage", accountId, "amortization", extraPayment],
     queryFn: () =>
       api
         .get(`/accounts/${accountId}/mortgage/amortization`, {
-          params: extraPayment !== undefined ? { extra_payment: extraPayment } : {},
+          params:
+            extraPayment !== undefined ? { extra_payment: extraPayment } : {},
         })
         .then((r) => r.data),
-    enabled: !!accountId,
+    enabled: !!accountId && enabled,
   });
 }
 

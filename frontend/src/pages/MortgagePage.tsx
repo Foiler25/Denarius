@@ -86,8 +86,11 @@ export default function MortgagePage() {
   const [viewMode, setViewMode] = useState<ViewMode>("first12");
 
   const { data: mortgage, isLoading: mortLoading, isError: mortError } = useMortgage(accountId);
-  // Pass extra_payment=0 so the schedule shows the standard baseline amortization
-  const { data: amortizationData, isLoading: amorLoading } = useAmortization(accountId, 0);
+  const { data: amortizationData, isLoading: amorLoading } = useAmortization(
+    accountId,
+    mortgage?.extra_payment,
+    !!mortgage
+  );
 
   const mortgageInfo: MortgageData | null = mortgage ?? null;
   const allRows: AmortizationRow[] = Array.isArray(amortizationData) ? amortizationData : [];
