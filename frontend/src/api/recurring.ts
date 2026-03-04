@@ -28,7 +28,14 @@ export function useUpdateRecurring(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => api.put(`/recurring/${id}`, data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring"] }),
+    onSuccess: (updatedItem) => {
+      // Immediately patch the cache so cards reflect the new values before the refetch lands.
+      qc.setQueriesData({ queryKey: ["recurring"] }, (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((item: { id: string }) => (item.id === id ? updatedItem : item));
+      });
+      qc.invalidateQueries({ queryKey: ["recurring"] });
+    },
   });
 }
 

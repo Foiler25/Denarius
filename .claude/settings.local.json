@@ -6,7 +6,22 @@
       "Bash(docker compose up -d)",
       "Bash(docker compose up --build -d backup-cron)",
       "Bash(docker exec denarius-backend-1 pip show bcrypt passlib)",
-      "Bash(docker restart denarius-backend-1)"
+      "Bash(docker restart denarius-backend-1)",
+      "Bash(curl -s -X POST http://localhost:9723/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"admin\"\"}')",
+      "Bash(docker exec denarius-postgres-1 psql -U postgres -d denarius -c \"SELECT username, role FROM users LIMIT 5;\")",
+      "Bash(docker exec denarius-postgres-1 psql -U denarius -d denarius -c \"SELECT id, username, role FROM users LIMIT 5;\")",
+      "Bash(# Try to log in with common passwords or look for user setup cat /Users/loofa/Documents/Denarius/backend/app/routers/users.py)",
+      "Bash(docker exec denarius-backend-1 python3 -c \":*)",
+      "Bash(docker exec:*)",
+      "Bash(docker compose build backend)",
+      "Bash(docker compose up -d backend)",
+      "Bash(docker compose build frontend)",
+      "Bash(docker compose up -d frontend)",
+      "Bash(curl -s http://localhost:9723/api/v1/system/health)",
+      "mcp__grepai__grepai_index_status",
+      "mcp__grepai__grepai_list_workspaces",
+      "mcp__grepai__grepai_search",
+      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)"
     ]
   }
 }

@@ -32,6 +32,7 @@ export function useUpdateTransaction(id: string) {
       qc.invalidateQueries({ queryKey: ["networth"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["recurring"] });
     },
   });
 }

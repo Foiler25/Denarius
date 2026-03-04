@@ -22,4 +22,5 @@ class Category(Base, UUIDMixin, TimestampMixin):
     icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    once_per_month: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

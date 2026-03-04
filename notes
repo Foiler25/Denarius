@@ -1,0 +1,7 @@
+The price paid does not match the bill in recurring when the value changes and is updated. 
+
+Make sure the account balances are updated correctly when editing transactions or changing where it came from/went to.
+
+Make sure the entire site is based locally on a timezone that can be specified in the settings. 
+
+If a transaction matches a subscription/bill it should change the category shown in the transactions page to say "Sub" or "Bill" instead of expense. For mortgage payments or loan payments say "Loan"

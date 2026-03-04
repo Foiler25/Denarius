@@ -1,10 +1,15 @@
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel
 from app.models.transaction import TransactionType
 from app.schemas.category import CategoryOut
+
+
+class RecurringItemRef(BaseModel):
+    model_config = {"from_attributes": True}
+    type: str
 
 
 class TransactionCreate(BaseModel):
@@ -17,6 +22,12 @@ class TransactionCreate(BaseModel):
     notes: Optional[str] = None
     date: date
     is_cleared: bool = False
+    once_per_month_override: Optional[Literal["extra_payment", "next_month_payment"]] = None
+
+
+# Alias to avoid Python naming conflict: the field name 'date' would shadow
+# the 'date' type from datetime when the field has a default of None.
+_Date = date
 
 
 class TransactionUpdate(BaseModel):
@@ -24,8 +35,9 @@ class TransactionUpdate(BaseModel):
     amount: Optional[Decimal] = None
     description: Optional[str] = None
     notes: Optional[str] = None
-    date: Optional[date] = None
+    date: Optional[_Date] = None
     is_cleared: Optional[bool] = None
+    once_per_month_override: Optional[Literal["extra_payment", "next_month_payment"]] = None
 
 
 class TransactionOut(BaseModel):
@@ -43,6 +55,7 @@ class TransactionOut(BaseModel):
     date: date
     is_cleared: bool
     category: Optional[CategoryOut] = None
+    recurring_item: Optional[RecurringItemRef] = None
 
 
 class BulkDeleteRequest(BaseModel):

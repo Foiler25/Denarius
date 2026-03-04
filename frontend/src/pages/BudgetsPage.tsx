@@ -325,7 +325,7 @@ export default function BudgetsPage() {
                     <Select value={newCategoryId} onValueChange={setNewCategoryId}>
                       <SelectTrigger><SelectValue placeholder="Select category…" /></SelectTrigger>
                       <SelectContent>
-                        {(categories as Category[]).map((c) => (
+                        {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
                           <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                         ))}
                       </SelectContent>

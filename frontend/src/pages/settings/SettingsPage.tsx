@@ -58,6 +58,7 @@ interface Category {
   type: string;
   is_system: boolean;
   color?: string;
+  once_per_month: boolean;
 }
 
 interface User {
@@ -520,12 +521,14 @@ interface CategoryFormState {
   name: string;
   type: string;
   color: string;
+  once_per_month: boolean;
 }
 
 const emptyCategoryForm = (): CategoryFormState => ({
   name: "",
   type: "expense",
   color: "#6366f1",
+  once_per_month: false,
 });
 
 function CategoriesTab() {
@@ -552,7 +555,7 @@ function CategoriesTab() {
 
   function openEdit(cat: Category) {
     setEditCategory(cat);
-    setForm({ name: cat.name, type: cat.type, color: cat.color ?? "#6366f1" });
+    setForm({ name: cat.name, type: cat.type, color: cat.color ?? "#6366f1", once_per_month: cat.once_per_month });
     setFormError(null);
     setAddOpen(true);
   }
@@ -565,9 +568,9 @@ function CategoriesTab() {
     if (!form.name.trim()) { setFormError("Category name is required."); return; }
     try {
       if (editCategory && updateCategory) {
-        await updateCategory.mutateAsync({ name: form.name, type: form.type, color: form.color });
+        await updateCategory.mutateAsync({ name: form.name, type: form.type, color: form.color, once_per_month: form.once_per_month });
       } else {
-        await createCategory.mutateAsync({ name: form.name, type: form.type, color: form.color });
+        await createCategory.mutateAsync({ name: form.name, type: form.type, color: form.color, once_per_month: form.once_per_month });
       }
       setAddOpen(false);
     } catch {
@@ -596,8 +599,9 @@ function CategoriesTab() {
     );
   }
 
-  const expenseCategories = categoryList.filter((c) => c.type === "expense");
-  const incomeCategories = categoryList.filter((c) => c.type === "income");
+  const sortedList = [...categoryList].sort((a, b) => a.name.localeCompare(b.name));
+  const expenseCategories = sortedList.filter((c) => c.type === "expense");
+  const incomeCategories = sortedList.filter((c) => c.type === "income");
 
   return (
     <div className="space-y-4">
@@ -642,7 +646,16 @@ function CategoriesTab() {
                               <span className="font-medium">{cat.name}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground capitalize">{cat.type}</td>
+                          <td className="px-4 py-3 text-muted-foreground capitalize">
+                            <div className="flex items-center gap-2">
+                              <span>{cat.type}</span>
+                              {cat.once_per_month && (
+                                <Badge variant="outline" className="text-xs py-0 border-amber-400 text-amber-600">
+                                  1×/mo
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cat)}>
@@ -712,6 +725,16 @@ function CategoriesTab() {
                   />
                   <span className="text-sm text-muted-foreground">{form.color}</span>
                 </div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border border-input px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Once per month</p>
+                  <p className="text-xs text-muted-foreground">Can only be attached to one recurring bill</p>
+                </div>
+                <Switch
+                  checked={form.once_per_month}
+                  onCheckedChange={(v) => setForm({ ...form, once_per_month: v })}
+                />
               </div>
             </div>
             <DialogFooter className="mt-4">

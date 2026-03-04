@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from app.dependencies import get_current_user, get_db
 from app.models.account import Account
+from app.models.category import Category
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.transaction import BulkDeleteRequest, TransactionCreate, TransactionOut, TransactionUpdate
@@ -20,6 +21,42 @@ from app.services.recurring_service import find_and_attach_recurring, detach_rec
 from app.utils.pagination import PagedResponse
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+async def _check_once_per_month_transaction(
+    category_id: uuid.UUID | None,
+    txn_date: date,
+    db: AsyncSession,
+    exclude_txn_id: uuid.UUID | None = None,
+    override: str | None = None,
+) -> None:
+    """Raise 409 if category is once_per_month and a transaction already exists this month, unless overridden."""
+    if not category_id or override:
+        return
+    cat = await db.get(Category, category_id)
+    if not cat or not cat.once_per_month:
+        return
+    month_start = txn_date.replace(day=1)
+    month_end = (
+        month_start.replace(year=month_start.year + 1, month=1, day=1)
+        if month_start.month == 12
+        else month_start.replace(month=month_start.month + 1)
+    )
+    q = select(Transaction).where(
+        Transaction.category_id == category_id,
+        Transaction.date >= month_start,
+        Transaction.date < month_end,
+        Transaction.deleted_at == None,
+    )
+    if exclude_txn_id:
+        q = q.where(Transaction.id != exclude_txn_id)
+    existing = (await db.execute(q)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Category '{cat.name}' is marked once-per-month and already has a transaction this month.",
+            headers={"X-Conflict": "once_per_month"},
+        )
 
 
 @router.get("", response_model=PagedResponse[TransactionOut])
@@ -36,7 +73,7 @@ async def list_transactions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Transaction).options(selectinload(Transaction.category)).where(Transaction.deleted_at == None)
+    q = select(Transaction).options(selectinload(Transaction.category), selectinload(Transaction.recurring_item)).where(Transaction.deleted_at == None)
     if account_id:
         q = q.where(Transaction.account_id == account_id)
     if category_id:
@@ -66,7 +103,10 @@ async def create_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    txn = Transaction(**data.model_dump(), created_by=current_user.id)
+    override = data.once_per_month_override
+    await _check_once_per_month_transaction(data.category_id, data.date, db, override=override)
+
+    txn = Transaction(**data.model_dump(exclude={"once_per_month_override"}), created_by=current_user.id)
     db.add(txn)
 
     # Update account balance
@@ -96,8 +136,10 @@ async def create_transaction(
                 )
                 db.add(dest_txn)
 
-    # Auto-match to a recurring item if one is configured for this transaction
-    if not data.model_dump().get("recurring_item_id"):
+    # Auto-match to a recurring item if one is configured for this transaction.
+    # extra_payment skips matching (standalone payment, don't advance next_due_date).
+    # next_month_payment runs matching so the recurring item advances an extra cycle.
+    if override != "extra_payment" and not data.model_dump(exclude={"once_per_month_override"}).get("recurring_item_id"):
         await find_and_attach_recurring(txn, db)
 
     await db.commit()
@@ -163,8 +205,61 @@ async def update_transaction(
     current_user: User = Depends(get_current_user),
 ):
     txn = await _get_or_404(transaction_id, db)
-    for field, value in data.model_dump(exclude_none=True).items():
+    had_recurring = txn.recurring_item_id is not None
+    override = data.once_per_month_override
+
+    # Snapshot state needed for balance adjustment and transfer counterpart lookup
+    old_amount = txn.amount
+    old_date = txn.date
+
+    for field, value in data.model_dump(exclude_none=True, exclude={"once_per_month_override"}).items():
         setattr(txn, field, value)
+
+    await _check_once_per_month_transaction(txn.category_id, txn.date, db, exclude_txn_id=txn.id, override=override)
+
+    amount_delta = txn.amount - old_amount
+
+    if txn.type == TransactionType.transfer and txn.transfer_account_id:
+        # Find the counterpart income leg using pre-edit values
+        dest_result = await db.execute(
+            select(Transaction).where(
+                Transaction.account_id == txn.transfer_account_id,
+                Transaction.transfer_account_id == txn.account_id,
+                Transaction.amount == old_amount,
+                Transaction.date == old_date,
+                Transaction.deleted_at == None,
+            )
+        )
+        dest_txn = dest_result.scalar_one_or_none()
+
+        if amount_delta != 0:
+            src_account = await db.get(Account, txn.account_id)
+            if src_account:
+                src_account.current_balance -= amount_delta
+            if dest_txn:
+                dest_txn.amount = txn.amount
+                dest_account = await db.get(Account, dest_txn.account_id)
+                if dest_account:
+                    dest_account.current_balance += amount_delta
+
+        # Sync metadata fields to counterpart leg
+        if dest_txn:
+            dest_txn.date = txn.date
+            dest_txn.description = txn.description
+            dest_txn.notes = txn.notes
+            dest_txn.category_id = txn.category_id
+
+    elif amount_delta != 0:
+        account = await db.get(Account, txn.account_id)
+        if account:
+            if txn.type == TransactionType.expense:
+                account.current_balance -= amount_delta
+            elif txn.type == TransactionType.income:
+                account.current_balance += amount_delta
+
+    # If the transaction had no recurring link and the edit might now make it match, re-check
+    if not had_recurring and txn.recurring_item_id is None and override != "extra_payment":
+        await find_and_attach_recurring(txn, db)
     await db.commit()
     return await _get_or_404(txn.id, db)
 
@@ -236,7 +331,7 @@ async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: d
 async def _get_or_404(transaction_id: uuid.UUID, db: AsyncSession) -> Transaction:
     result = await db.execute(
         select(Transaction)
-        .options(selectinload(Transaction.category))
+        .options(selectinload(Transaction.category), selectinload(Transaction.recurring_item))
         .where(Transaction.id == transaction_id, Transaction.deleted_at == None)
     )
     txn = result.scalar_one_or_none()

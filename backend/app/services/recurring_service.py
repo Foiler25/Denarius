@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.category import Category
 from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.utils.date_utils import advance_by_frequency, rewind_by_frequency
@@ -18,7 +19,7 @@ async def mark_paid(
     amount=None,
 ) -> Transaction:
     txn_date = payment_date or date.today()
-    txn_amount = amount or item.amount
+    txn_amount = amount if amount is not None else item.amount
     txn_type = TransactionType.income if item.type.value == "income" else TransactionType.expense
 
     txn = Transaction(
@@ -98,16 +99,49 @@ def _keywords_match(description: str | None, keyword_match: str) -> bool:
     return any(k in desc for k in keywords)
 
 
+def _attach_to_item(txn: Transaction, item: RecurringItem) -> None:
+    """Link a transaction to a recurring item and advance its tracking fields."""
+    txn.recurring_item_id = item.id
+    item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
+    item.last_paid_date = txn.date
+    item.last_paid_amount = txn.amount
+    item.last_paid_transaction_id = txn.id
+
+
 async def find_and_attach_recurring(txn: Transaction, db: AsyncSession) -> RecurringItem | None:
     """
-    Check all auto_match-enabled recurring items to see if this transaction matches.
-    A match requires:
-      - keyword_match set on the item: all keywords must appear in the transaction description
-      - amount within the configured range (exact ±5% or min–max range)
-      - if both item and transaction have a category, they must agree
+    Attempt to link a transaction to a recurring item.
+
+    Pass 1 — category match (once_per_month categories only):
+      If the transaction has a category that is marked once_per_month, find the
+      active recurring item for that category and link immediately (no keyword/amount
+      check needed — the category constraint is already explicit user intent).
+
+    Pass 2 — keyword + amount match (auto_match items only):
+      Fallback for transactions without a once_per_month category. Requires
+      auto_match=True on the recurring item plus keyword and amount criteria.
 
     Returns the matched RecurringItem (with next_due_date already advanced) or None.
     """
+    # Pass 1: category-first for once_per_month categories
+    if txn.category_id:
+        stmt = (
+            select(RecurringItem)
+            .join(Category, RecurringItem.category_id == Category.id)
+            .where(
+                RecurringItem.category_id == txn.category_id,
+                RecurringItem.is_active == True,
+                RecurringItem.deleted_at == None,
+                Category.once_per_month == True,
+                Category.deleted_at == None,
+            )
+        )
+        cat_match = (await db.execute(stmt)).scalar_one_or_none()
+        if cat_match:
+            _attach_to_item(txn, cat_match)
+            return cat_match
+
+    # Pass 2: keyword + amount matching (requires auto_match=True)
     result = await db.execute(
         select(RecurringItem).where(
             RecurringItem.auto_match == True,
@@ -137,14 +171,57 @@ async def find_and_attach_recurring(txn: Transaction, db: AsyncSession) -> Recur
             continue
 
         # Match found — link and advance
+        _attach_to_item(txn, item)
+        return item
+
+    return None
+
+
+async def match_unlinked_current_month(item: RecurringItem, db: AsyncSession) -> bool:
+    """
+    After editing a recurring item, find and attach the most recent unlinked
+    transaction from the current calendar month that matches the item's criteria.
+
+    Only runs when auto_match is enabled and the item is not already marked paid
+    for the current period. Returns True if a transaction was linked.
+    """
+    if not item.auto_match:
+        return False
+    if not item.keyword_match and not item.category_id:
+        return False
+
+    today = date.today()
+    period_start = rewind_by_frequency(item.next_due_date, item.frequency)
+    if item.last_paid_date is not None and item.last_paid_date >= period_start:
+        return False
+
+    month_start = today.replace(day=1)
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.recurring_item_id == None,
+            Transaction.deleted_at == None,
+            Transaction.date >= month_start,
+            Transaction.date <= today,
+        ).order_by(Transaction.date.desc())
+    )
+
+    for txn in result.scalars().all():
+        txn_amount = abs(txn.amount)
+        if item.keyword_match and not _keywords_match(txn.description, item.keyword_match):
+            continue
+        if not _amount_in_range(txn_amount, item):
+            continue
+        if item.category_id and txn.category_id and item.category_id != txn.category_id:
+            continue
+
         txn.recurring_item_id = item.id
         item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
         item.last_paid_date = txn.date
         item.last_paid_amount = txn.amount
         item.last_paid_transaction_id = txn.id
-        return item
+        return True
 
-    return None
+    return False
 
 
 async def detach_recurring(txn: Transaction, db: AsyncSession) -> None:

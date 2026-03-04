@@ -23,7 +23,7 @@ async def list_categories(
     q = select(Category).where(Category.deleted_at == None)
     if type:
         q = q.where(Category.type == type)
-    result = await db.execute(q.order_by(Category.sort_order, Category.name))
+    result = await db.execute(q.order_by(Category.name))
     return result.scalars().all()
 
 

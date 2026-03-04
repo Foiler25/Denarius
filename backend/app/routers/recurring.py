@@ -7,10 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
+from app.models.category import Category
 from app.models.recurring_item import RecurringItem, RecurringType
 from app.models.user import User
 from app.schemas.recurring_item import MarkPaidRequest, RecurringCreate, RecurringOut, RecurringUpdate
-from app.services.recurring_service import mark_paid
+from app.services.recurring_service import mark_paid, match_unlinked_current_month
 from app.utils.date_utils import rewind_by_frequency
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
@@ -63,12 +64,39 @@ async def upcoming_recurring(
     return [_with_days_until_due(item) for item in result.scalars().all()]
 
 
+async def _check_once_per_month_category(
+    category_id: uuid.UUID | None,
+    db: AsyncSession,
+    exclude_item_id: uuid.UUID | None = None,
+) -> None:
+    """Raise 409 if category is once_per_month and already assigned to another active recurring item."""
+    if not category_id:
+        return
+    cat = await db.get(Category, category_id)
+    if not cat or not cat.once_per_month:
+        return
+    q = select(RecurringItem).where(
+        RecurringItem.category_id == category_id,
+        RecurringItem.deleted_at == None,
+        RecurringItem.is_active == True,
+    )
+    if exclude_item_id:
+        q = q.where(RecurringItem.id != exclude_item_id)
+    existing = (await db.execute(q)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Category '{cat.name}' is marked once-per-month and is already assigned to another active recurring bill.",
+        )
+
+
 @router.post("", response_model=RecurringOut, status_code=201)
 async def create_recurring(
     data: RecurringCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    await _check_once_per_month_category(data.category_id, db)
     item = RecurringItem(**data.model_dump(), created_by=current_user.id)
     db.add(item)
     await db.commit()
@@ -93,8 +121,11 @@ async def update_recurring(
     current_user: User = Depends(get_current_user),
 ):
     item = await _get_or_404(item_id, db)
-    for field, value in data.model_dump(exclude_none=True).items():
+    new_category_id = data.model_dump(exclude_none=True).get("category_id", item.category_id)
+    await _check_once_per_month_category(new_category_id, db, exclude_item_id=item_id)
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(item, field, value)
+    await match_unlinked_current_month(item, db)
     await db.commit()
     await db.refresh(item)
     return _with_days_until_due(item)

@@ -10,6 +10,7 @@ class CategoryCreate(BaseModel):
     color: str = "#6B7280"
     icon: Optional[str] = None
     sort_order: int = 0
+    once_per_month: bool = False
 
 
 class CategoryUpdate(BaseModel):
@@ -17,6 +18,7 @@ class CategoryUpdate(BaseModel):
     color: Optional[str] = None
     icon: Optional[str] = None
     sort_order: Optional[int] = None
+    once_per_month: Optional[bool] = None
 
 
 class CategoryOut(BaseModel):
@@ -29,3 +31,4 @@ class CategoryOut(BaseModel):
     icon: Optional[str]
     is_system: bool
     sort_order: int
+    once_per_month: bool

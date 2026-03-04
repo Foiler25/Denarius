@@ -45,3 +45,4 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])
     category: Mapped["Category"] = relationship("Category")
     creator: Mapped["User"] = relationship("User")
+    recurring_item: Mapped["RecurringItem | None"] = relationship("RecurringItem", foreign_keys=[recurring_item_id], lazy="noload")

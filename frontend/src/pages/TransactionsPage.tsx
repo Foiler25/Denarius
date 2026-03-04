@@ -36,10 +36,18 @@ interface Transaction {
   category?: { id: string; name: string; type: string } | null;
   account_id: string;
   transfer_account_id?: string | null;
+  recurring_item?: { type: string } | null;
   type: "income" | "expense" | "transfer";
   amount: number;
   is_cleared: boolean;
   notes?: string;
+}
+
+function getTxLabel(tx: Transaction): string {
+  if (tx.recurring_item?.type === "subscription") return "Sub";
+  if (tx.recurring_item?.type === "bill") return "Bill";
+  if (/mortgage|loan/i.test(tx.category?.name ?? "")) return "Loan";
+  return tx.type;
 }
 
 interface Account {
@@ -97,13 +105,15 @@ export default function TransactionsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<TxFormState>(emptyForm());
   const [formError, setFormError] = useState<string | null>(null);
+  const [overridePromptOpen, setOverridePromptOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const queryParams: Record<string, unknown> = {
     page,
-    per_page: PAGE_SIZE,
+    limit: PAGE_SIZE,
     ...(search ? { search } : {}),
     ...(accountFilter !== "all" ? { account_id: accountFilter } : {}),
     ...(typeFilter !== "all" ? { type: typeFilter } : {}),
@@ -125,6 +135,39 @@ export default function TransactionsPage() {
     setPage(1);
   }
 
+  function buildAddPayload(override?: string): Record<string, unknown> {
+    return {
+      date: form.date,
+      description: form.description,
+      amount: parseFloat(form.amount),
+      type: form.type,
+      account_id: form.account_id,
+      is_cleared: form.cleared,
+      notes: form.notes || null,
+      category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
+      transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
+      ...(override ? { once_per_month_override: override } : {}),
+    };
+  }
+
+  async function submitAddPayload(payload: Record<string, unknown>) {
+    try {
+      await createTx.mutateAsync(payload);
+      setAddOpen(false);
+      setForm(emptyForm());
+      setOverridePromptOpen(false);
+      setPendingPayload(null);
+    } catch (err: unknown) {
+      const resp = (err as { response?: { status?: number; headers?: Record<string, string> } }).response;
+      if (resp?.status === 409 && resp.headers?.["x-conflict"] === "once_per_month") {
+        setPendingPayload(payload);
+        setOverridePromptOpen(true);
+      } else {
+        setFormError("Failed to add transaction. Please try again.");
+      }
+    }
+  }
+
   async function handleAddSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -133,23 +176,12 @@ export default function TransactionsPage() {
     if (!form.account_id) { setFormError("From account is required."); return; }
     if (form.type === "transfer" && !form.transfer_account_id) { setFormError("To account is required for transfers."); return; }
     if (form.type === "transfer" && form.transfer_account_id === form.account_id) { setFormError("From and To accounts must be different."); return; }
-    try {
-      await createTx.mutateAsync({
-        date: form.date,
-        description: form.description,
-        amount: parseFloat(form.amount),
-        type: form.type,
-        account_id: form.account_id,
-        is_cleared: form.cleared,
-        notes: form.notes || null,
-        category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
-        transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
-      });
-      setAddOpen(false);
-      setForm(emptyForm());
-    } catch {
-      setFormError("Failed to add transaction. Please try again.");
-    }
+    await submitAddPayload(buildAddPayload());
+  }
+
+  async function handleAddOverride(override: string) {
+    if (!pendingPayload) return;
+    await submitAddPayload({ ...pendingPayload, once_per_month_override: override });
   }
 
   async function handleDelete() {
@@ -264,7 +296,7 @@ export default function TransactionsPage() {
                     <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Uncategorized</SelectItem>
-                      {(categories as Category[]).map((c) => (
+                      {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -445,6 +477,33 @@ export default function TransactionsPage() {
         </div>
       )}
 
+      {/* Once-Per-Month Override Prompt */}
+      <Dialog open={overridePromptOpen} onOpenChange={(o) => { if (!o) { setOverridePromptOpen(false); setPendingPayload(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Category already used this month</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This category is set to once per month but already has a transaction recorded. What type of payment is this?
+          </p>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button onClick={() => handleAddOverride("extra_payment")} disabled={createTx.isPending} variant="outline">
+              Extra Payment
+              <span className="ml-2 text-xs text-muted-foreground">— additional payment, bill stays the same</span>
+            </Button>
+            <Button onClick={() => handleAddOverride("next_month_payment")} disabled={createTx.isPending} variant="outline">
+              Next Month Payment
+              <span className="ml-2 text-xs text-muted-foreground">— paying ahead, advances bill cycle</span>
+            </Button>
+          </div>
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button variant="ghost" size="sm">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="max-w-sm">
@@ -474,7 +533,7 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TxFormState>({
     date: tx.date,
-    description: tx.description,
+    description: tx.description ?? "",
     amount: String(tx.amount),
     type: tx.type,
     account_id: tx.account_id,
@@ -484,6 +543,8 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
     notes: tx.notes ?? "",
   });
   const [editError, setEditError] = useState<string | null>(null);
+  const [editOverrideOpen, setEditOverrideOpen] = useState(false);
+  const [pendingEditPayload, setPendingEditPayload] = useState<Record<string, unknown> | null>(null);
   const accountName = accounts.find((a) => a.id === tx.account_id)?.name ?? "—";
 
   async function handleClearedChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -496,6 +557,38 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
     }
   }
 
+  function buildEditPayload(override?: string): Record<string, unknown> {
+    return {
+      date: editForm.date,
+      description: editForm.description,
+      amount: editForm.amount,
+      type: editForm.type,
+      account_id: editForm.account_id,
+      is_cleared: editForm.cleared,
+      notes: editForm.notes || null,
+      category_id: editForm.category_id !== "none" && editForm.category_id ? editForm.category_id : null,
+      transfer_account_id: editForm.type === "transfer" && editForm.transfer_account_id ? editForm.transfer_account_id : null,
+      ...(override ? { once_per_month_override: override } : {}),
+    };
+  }
+
+  async function submitEditPayload(payload: Record<string, unknown>) {
+    try {
+      await updateTx.mutateAsync(payload);
+      setEditOpen(false);
+      setEditOverrideOpen(false);
+      setPendingEditPayload(null);
+    } catch (err: unknown) {
+      const resp = (err as { response?: { status?: number; headers?: Record<string, string> } }).response;
+      if (resp?.status === 409 && resp.headers?.["x-conflict"] === "once_per_month") {
+        setPendingEditPayload(payload);
+        setEditOverrideOpen(true);
+      } else {
+        setEditError("Failed to save changes. Please try again.");
+      }
+    }
+  }
+
   async function handleEditSubmit(e: React.FormEvent) {
     e.preventDefault();
     setEditError(null);
@@ -504,22 +597,12 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
     if (!editForm.account_id) { setEditError("Account is required."); return; }
     if (editForm.type === "transfer" && !editForm.transfer_account_id) { setEditError("To account is required for transfers."); return; }
     if (editForm.type === "transfer" && editForm.transfer_account_id === editForm.account_id) { setEditError("From and To accounts must be different."); return; }
-    try {
-      await updateTx.mutateAsync({
-        date: editForm.date,
-        description: editForm.description,
-        amount: parseFloat(editForm.amount),
-        type: editForm.type,
-        account_id: editForm.account_id,
-        is_cleared: editForm.cleared,
-        notes: editForm.notes || null,
-        category_id: editForm.category_id !== "none" && editForm.category_id ? editForm.category_id : null,
-        transfer_account_id: editForm.type === "transfer" && editForm.transfer_account_id ? editForm.transfer_account_id : null,
-      });
-      setEditOpen(false);
-    } catch {
-      setEditError("Failed to save changes. Please try again.");
-    }
+    await submitEditPayload(buildEditPayload());
+  }
+
+  async function handleEditOverride(override: string) {
+    if (!pendingEditPayload) return;
+    await submitEditPayload({ ...pendingEditPayload, once_per_month_override: override });
   }
 
   return (
@@ -534,11 +617,11 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
           className={cn(
             "text-xs capitalize",
             tx.type === "income" ? "border-emerald-500 text-emerald-600" :
-            tx.type === "expense" ? "border-destructive text-destructive" :
-            "border-muted-foreground text-muted-foreground"
+            tx.type === "transfer" ? "border-muted-foreground text-muted-foreground" :
+            "border-destructive text-destructive"
           )}
         >
-          {tx.type}
+          {getTxLabel(tx)}
         </Badge>
       </td>
       <td className={cn("px-4 py-3 text-right font-semibold", tx.type === "income" ? "text-emerald-600" : "text-destructive")}>
@@ -687,6 +770,33 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
           </Button>
         </div>
       </td>
+
+      {/* Edit — Once-Per-Month Override Prompt */}
+      <Dialog open={editOverrideOpen} onOpenChange={(o) => { if (!o) { setEditOverrideOpen(false); setPendingEditPayload(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Category already used this month</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This category is set to once per month but already has a transaction recorded. What type of payment is this?
+          </p>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button onClick={() => handleEditOverride("extra_payment")} disabled={updateTx.isPending} variant="outline">
+              Extra Payment
+              <span className="ml-2 text-xs text-muted-foreground">— additional payment, bill stays the same</span>
+            </Button>
+            <Button onClick={() => handleEditOverride("next_month_payment")} disabled={updateTx.isPending} variant="outline">
+              Next Month Payment
+              <span className="ml-2 text-xs text-muted-foreground">— paying ahead, advances bill cycle</span>
+            </Button>
+          </div>
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button variant="ghost" size="sm">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </tr>
   );
 }

@@ -387,7 +387,7 @@ function RecurringTab({
                     <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {(categories as Category[]).map((c) => (
+                      {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
                         <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))}
                     </SelectContent>
