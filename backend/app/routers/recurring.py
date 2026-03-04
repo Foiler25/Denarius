@@ -142,7 +142,7 @@ async def delete_recurring(
     await db.commit()
 
 
-@router.post("/{item_id}/mark-paid", status_code=201)
+@router.post("/{item_id}/mark-paid", response_model=RecurringOut, status_code=201)
 async def mark_paid_endpoint(
     item_id: uuid.UUID,
     data: MarkPaidRequest,
@@ -150,8 +150,9 @@ async def mark_paid_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     item = await _get_or_404(item_id, db)
-    txn = await mark_paid(item, db, current_user.id, data.date, data.amount)
-    return {"transaction_id": str(txn.id), "next_due_date": str(item.next_due_date)}
+    await mark_paid(item, db, current_user.id, data.date, data.amount)
+    await db.refresh(item)
+    return _with_days_until_due(item)
 
 
 async def _get_or_404(item_id: uuid.UUID, db: AsyncSession) -> RecurringItem:

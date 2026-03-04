@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Pencil, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,12 +95,21 @@ function Spinner() {
   );
 }
 
+function currentMonthDates() {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+  const end = today.toISOString().slice(0, 10);
+  return { start, end };
+}
+
 export default function TransactionsPage() {
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("category_id") ?? "all");
+  const [startDate, setStartDate] = useState(() => currentMonthDates().start);
+  const [endDate, setEndDate] = useState(() => currentMonthDates().end);
   const [page, setPage] = useState(1);
 
   const [addOpen, setAddOpen] = useState(false);
@@ -117,6 +127,7 @@ export default function TransactionsPage() {
     ...(search ? { search } : {}),
     ...(accountFilter !== "all" ? { account_id: accountFilter } : {}),
     ...(typeFilter !== "all" ? { type: typeFilter } : {}),
+    ...(categoryFilter !== "all" ? { category_id: categoryFilter } : {}),
     ...(startDate ? { start_date: startDate } : {}),
     ...(endDate ? { end_date: endDate } : {}),
   };
@@ -374,6 +385,18 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="min-w-[160px] space-y-1">
+              <Label className="text-xs">Category</Label>
+              <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); handleFilterChange(); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">From</Label>
               <Input
@@ -396,8 +419,9 @@ export default function TransactionsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
+                const { start, end } = currentMonthDates();
                 setSearch(""); setAccountFilter("all"); setTypeFilter("all");
-                setStartDate(""); setEndDate(""); setPage(1);
+                setCategoryFilter("all"); setStartDate(start); setEndDate(end); setPage(1);
               }}
             >
               Reset

@@ -243,3 +243,21 @@ async def detach_recurring(txn: Transaction, db: AsyncSession) -> None:
     item.last_paid_date = None
     item.last_paid_amount = None
     item.last_paid_transaction_id = None
+
+
+async def update_recurring_item(txn: Transaction, db: AsyncSession) -> None:
+    """If the transaction is linked to a recurring item, update the item's details."""
+    if txn.recurring_item_id is None:
+        return
+
+    item = await db.get(RecurringItem, txn.recurring_item_id)
+    if not item:
+        return
+
+    is_current_payment = (
+        item.last_paid_transaction_id == txn.id
+        or (item.last_paid_transaction_id is None and item.last_paid_date == txn.date)
+    )
+    if is_current_payment:
+        item.last_paid_amount = txn.amount
+        item.amount = txn.amount

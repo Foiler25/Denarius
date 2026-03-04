@@ -14,5 +14,4 @@ build/
 *.log
 startup-shutdown
 .grepai/
-codebase-breakdown.md
 notes

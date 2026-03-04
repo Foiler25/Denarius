@@ -17,7 +17,11 @@ from app.models.category import Category
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.transaction import BulkDeleteRequest, TransactionCreate, TransactionOut, TransactionUpdate
-from app.services.recurring_service import find_and_attach_recurring, detach_recurring
+from app.services.recurring_service import (
+    detach_recurring,
+    find_and_attach_recurring,
+    update_recurring_item,
+)
 from app.utils.pagination import PagedResponse
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -260,6 +264,9 @@ async def update_transaction(
     # If the transaction had no recurring link and the edit might now make it match, re-check
     if not had_recurring and txn.recurring_item_id is None and override != "extra_payment":
         await find_and_attach_recurring(txn, db)
+    elif had_recurring:
+        await update_recurring_item(txn, db)
+
     await db.commit()
     return await _get_or_404(txn.id, db)
 

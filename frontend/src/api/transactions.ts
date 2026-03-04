@@ -18,6 +18,7 @@ export function useCreateTransaction() {
       qc.invalidateQueries({ queryKey: ["networth"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.refetchQueries({ queryKey: ["recurring"] });
     },
   });
 }
@@ -32,7 +33,7 @@ export function useUpdateTransaction(id: string) {
       qc.invalidateQueries({ queryKey: ["networth"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["budgets"] });
-      qc.invalidateQueries({ queryKey: ["recurring"] });
+      qc.refetchQueries({ queryKey: ["recurring"] });
     },
   });
 }
@@ -47,6 +48,7 @@ export function useDeleteTransaction() {
       qc.invalidateQueries({ queryKey: ["networth"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.refetchQueries({ queryKey: ["recurring"] });
     },
   });
 }

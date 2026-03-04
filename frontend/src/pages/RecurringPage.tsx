@@ -583,6 +583,16 @@ function RecurringCard({
             <CheckCircle className="h-3.5 w-3.5" />
             Mark Paid
           </Button>
+          {item.category_id && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-xs h-8"
+              onClick={() => navigate(`/transactions?category_id=${item.category_id}`)}
+            >
+              {item.type === "subscription" ? "View Subs" : "View Bills"}
+            </Button>
+          )}
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>

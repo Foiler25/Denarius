@@ -1,5 +1,24 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import api from "./client";
+
+// Immediately patch all type-filtered recurring caches with an updated item.
+// Uses predicate matching to avoid relying on fuzzy key behaviour across TQ versions.
+function patchRecurringItem(qc: QueryClient, updatedItem: { id: string }) {
+  qc.setQueriesData(
+    {
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey[0] === "recurring" &&
+        query.queryKey[1] !== "upcoming",
+    },
+    (old: unknown) => {
+      if (!Array.isArray(old)) return old;
+      return old.map((item: { id: string }) =>
+        item.id === updatedItem.id ? updatedItem : item
+      );
+    }
+  );
+}
 
 export function useRecurring(type?: string, isActive: boolean = true) {
   return useQuery({
@@ -28,13 +47,9 @@ export function useUpdateRecurring(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => api.put(`/recurring/${id}`, data).then((r) => r.data),
-    onSuccess: (updatedItem) => {
-      // Immediately patch the cache so cards reflect the new values before the refetch lands.
-      qc.setQueriesData({ queryKey: ["recurring"] }, (old: unknown) => {
-        if (!Array.isArray(old)) return old;
-        return old.map((item: { id: string }) => (item.id === id ? updatedItem : item));
-      });
-      qc.invalidateQueries({ queryKey: ["recurring"] });
+    onSuccess: async (updatedItem) => {
+      patchRecurringItem(qc, updatedItem);
+      await qc.refetchQueries({ queryKey: ["recurring"] });
     },
   });
 }
@@ -52,7 +67,8 @@ export function useMarkPaid() {
   return useMutation({
     mutationFn: ({ id, date, amount }: { id: string; date?: string; amount?: number }) =>
       api.post(`/recurring/${id}/mark-paid`, { date, amount }).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (updatedItem) => {
+      patchRecurringItem(qc, updatedItem);
       qc.invalidateQueries({ queryKey: ["recurring"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
