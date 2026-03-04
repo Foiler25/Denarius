@@ -24,7 +24,8 @@ import {
   useMonthlyTrend,
   useCashFlow,
 } from "@/api/reports";
-import { formatCurrency, formatMonth } from "@/lib/utils";
+import { formatCurrency, formatMonth, todayString } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 const PIE_COLORS = [
   "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
@@ -416,17 +417,20 @@ function CashFlowTab({ dateRange }: { dateRange: DateRange }) {
 }
 
 // ---- Main Page ----
-function defaultDateRange(): DateRange {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  return {
-    start_date: start.toISOString().slice(0, 10),
-    end_date: now.toISOString().slice(0, 10),
-  };
+function defaultDateRange(tz: string): DateRange {
+  const today = todayString(tz);
+  const [y, m] = today.split("-").map(Number);
+  const startMonth = m - 11;
+  const startYear = y + Math.floor((startMonth - 1) / 12);
+  const normalizedMonth = ((startMonth - 1 + 120) % 12) + 1;
+  const start = `${startYear}-${String(normalizedMonth).padStart(2, "0")}-01`;
+  return { start_date: start, end_date: today };
 }
 
 export default function ReportsPage() {
-  const [dateRange, setDateRange] = useState<DateRange>(defaultDateRange);
+  const [dateRange, setDateRange] = useState<DateRange>(() =>
+    defaultDateRange(useSettingsStore.getState().timezone)
+  );
   const [activeTab, setActiveTab] = useState("spending");
 
   const showDateRange = activeTab !== "trends";

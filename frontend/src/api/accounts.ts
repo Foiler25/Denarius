@@ -7,8 +7,22 @@ export const accountsKeys = {
   transactions: (id: string) => ["accounts", id, "transactions"] as const,
 };
 
+export interface AccountOut {
+  id: string;
+  name: string;
+  type: string;
+  institution?: string;
+  current_balance: number;
+  credit_limit?: number;
+  is_active: boolean;
+  sort_order: number;
+  notes?: string;
+  color: string;
+  linked_mortgage_id?: string;
+}
+
 export function useAccounts() {
-  return useQuery({
+  return useQuery<AccountOut[]>({
     queryKey: accountsKeys.all,
     queryFn: () => api.get("/accounts").then((r) => r.data),
   });
@@ -65,6 +79,7 @@ export interface AccountBalanceHistoryAccount {
   id: string;
   name: string;
   type: string;
+  color?: string;
   balances: number[];
 }
 

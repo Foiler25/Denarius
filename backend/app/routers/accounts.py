@@ -122,6 +122,7 @@ async def get_balance_history(
             "id": str(account.id),
             "name": account.name,
             "type": account.type,
+            "color": account.color,
             "balances": balances,
         })
 
@@ -150,7 +151,7 @@ async def update_account(
     current_user: User = Depends(get_current_user),
 ):
     account = await _get_or_404(account_id, db)
-    for field, value in data.model_dump(exclude_none=True).items():
+    for field, value in data.model_dump(exclude_unset=True).items():
         setattr(account, field, value)
     await db.commit()
     await db.refresh(account)
@@ -164,6 +165,27 @@ async def delete_account(
     current_user: User = Depends(get_current_user),
 ):
     account = await _get_or_404(account_id, db)
+
+    # Block deletion of a property that still has a linked mortgage
+    if account.linked_mortgage_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="This property has a linked mortgage. Unlink it first before deleting.",
+        )
+
+    # Block deletion of a mortgage that a property is still linked to
+    linked_result = await db.execute(
+        select(Account).where(
+            Account.linked_mortgage_id == account_id,
+            Account.deleted_at == None,
+        )
+    )
+    if linked_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail="This mortgage is linked to a property. Unlink it first before deleting.",
+        )
+
     account.deleted_at = datetime.now(timezone.utc)
     account.is_active = False
     await db.commit()

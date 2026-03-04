@@ -29,22 +29,29 @@ async def get_current_net_worth(db: AsyncSession) -> NetWorthCurrent:
 
     for acc in accounts:
         is_asset = acc.type in ASSET_TYPES
+        balance = acc.current_balance
+
+        if is_asset:
+            assets += balance
+            item_balance = balance
+        elif acc.type in LIABILITY_TYPES:
+            liabilities += abs(balance)
+            item_balance = abs(balance)
+        else:
+            item_balance = balance
+
         item = AccountBreakdownItem(
             account_id=str(acc.id),
             account_name=acc.name,
             account_type=acc.type.value,
-            balance=acc.current_balance,
+            balance=item_balance,
             is_asset=is_asset,
         )
         breakdown.append(item)
-        if is_asset:
-            assets += acc.current_balance
-        elif acc.type in LIABILITY_TYPES:
-            liabilities += acc.current_balance
 
     return NetWorthCurrent(
-        assets=assets,
-        liabilities=liabilities,
+        total_assets=assets,
+        total_liabilities=liabilities,
         net_worth=assets - liabilities,
         accounts=breakdown,
     )
@@ -62,15 +69,15 @@ async def create_snapshot(db: AsyncSession, snapshot_date: date | None = None) -
     snap = existing.scalar_one_or_none()
 
     if snap:
-        snap.total_assets = current.assets
-        snap.total_liabilities = current.liabilities
+        snap.total_assets = current.total_assets
+        snap.total_liabilities = current.total_liabilities
         snap.net_worth = current.net_worth
         snap.account_breakdown = [a.model_dump() for a in current.accounts]
     else:
         snap = NetWorthSnapshot(
             snapshot_date=snapshot_date,
-            total_assets=current.assets,
-            total_liabilities=current.liabilities,
+            total_assets=current.total_assets,
+            total_liabilities=current.total_liabilities,
             net_worth=current.net_worth,
             account_breakdown=[a.model_dump() for a in current.accounts],
         )

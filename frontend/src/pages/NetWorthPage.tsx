@@ -24,7 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { useNetWorthCurrent, useNetWorthHistory, useCreateSnapshot } from "@/api/networth";
 import { useAuthStore } from "@/store/authStore";
-import { formatCurrency, formatMonth, cn } from "@/lib/utils";
+import { formatCurrency, formatMonth, todayString, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 interface AccountEntry {
   account_id: string;
@@ -57,18 +58,25 @@ function Spinner() {
   );
 }
 
-const HISTORY_MONTHS = 24;
+const TIME_RANGES = [
+  { label: "1M", months: 1 },
+  { label: "3M", months: 3 },
+  { label: "6M", months: 6 },
+  { label: "12M", months: 12 },
+  { label: "24M", months: 24 },
+] as const;
 
 export default function NetWorthPage() {
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === "admin";
 
+  const [months, setMonths] = useState(12);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
-  const [snapshotDate, setSnapshotDate] = useState(new Date().toISOString().slice(0, 10));
+  const [snapshotDate, setSnapshotDate] = useState(() => todayString(useSettingsStore.getState().timezone));
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
 
   const { data: current, isLoading: currLoading, isError: currError } = useNetWorthCurrent();
-  const { data: history = [], isLoading: histLoading } = useNetWorthHistory(HISTORY_MONTHS);
+  const { data: history = [], isLoading: histLoading } = useNetWorthHistory(months);
   const createSnapshot = useCreateSnapshot();
 
   const currentData: NetWorthCurrent | null = current ?? null;
@@ -139,12 +147,16 @@ export default function NetWorthPage() {
             <div className="flex items-center justify-center gap-8 mt-4">
               <div>
                 <p className="text-xs text-muted-foreground">Assets</p>
-                <p className="text-lg font-semibold text-emerald-600">{formatCurrency(currentData.total_assets)}</p>
+                <p className="text-lg font-semibold text-emerald-600">
+                  {formatCurrency(currentData.total_assets ?? 0)}
+                </p>
               </div>
               <div className="text-muted-foreground text-xl font-light">−</div>
               <div>
                 <p className="text-xs text-muted-foreground">Liabilities</p>
-                <p className="text-lg font-semibold text-destructive">{formatCurrency(currentData.total_liabilities)}</p>
+                <p className="text-lg font-semibold text-destructive">
+                  {formatCurrency(currentData.total_liabilities ?? 0)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -171,7 +183,12 @@ export default function NetWorthPage() {
                         <div className="font-medium">{a.account_name}</div>
                         <div className="text-xs text-muted-foreground capitalize">{a.account_type}</div>
                       </td>
-                      <td className="py-2 text-right font-semibold text-emerald-700">
+                      <td
+                        className={cn(
+                          "py-2 text-right font-semibold",
+                          a.balance < 0 ? "text-destructive" : "text-emerald-700"
+                        )}
+                      >
                         {formatCurrency(a.balance)}
                       </td>
                     </tr>
@@ -200,7 +217,12 @@ export default function NetWorthPage() {
                         <div className="font-medium">{a.account_name}</div>
                         <div className="text-xs text-muted-foreground capitalize">{a.account_type}</div>
                       </td>
-                      <td className="py-2 text-right font-semibold text-destructive">
+                      <td
+                        className={cn(
+                          "py-2 text-right font-semibold",
+                          a.balance < 0 ? "text-emerald-700" : "text-destructive"
+                        )}
+                      >
                         {formatCurrency(a.balance)}
                       </td>
                     </tr>
@@ -214,9 +236,23 @@ export default function NetWorthPage() {
 
       {/* Historical Chart */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Net Worth History</CardTitle>
-          <CardDescription className="text-xs">Last {HISTORY_MONTHS} months</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div>
+            <CardTitle className="text-base">Net Worth History</CardTitle>
+          </div>
+          <div className="flex gap-1">
+            {TIME_RANGES.map(({ label, months: m }) => (
+              <Button
+                key={label}
+                variant={months === m ? "secondary" : "ghost"}
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setMonths(m)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent>
           {histLoading ? (

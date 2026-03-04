@@ -1,3 +1,0 @@
-Make sure the entire site is based locally on a timezone that can be specified in the settings. 
-
-When attempting to add a home it says Failed to save account. Please try again. Also it shows current balance, it should be Property Value. When adding a property, remove the Institution and Account number. Also add a checkbox for Have a mortgage? Then add in the mortgage details below with Current Balance, Institution, and Account Number.

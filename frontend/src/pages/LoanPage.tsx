@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/select";
 import { useAccounts } from "@/api/accounts";
 import { useMortgage, useAmortization, useExtraPaymentCalc } from "@/api/mortgage";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, todayString, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 interface Account {
   id: string;
@@ -77,6 +78,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 export default function LoanPage() {
+  const { timezone } = useSettingsStore();
   const { data: accounts = [] } = useAccounts();
   const loanAccounts = (accounts as Account[]).filter((a) => a.type === "loan");
 
@@ -99,8 +101,8 @@ export default function LoanPage() {
   const selectedAccount = (accounts as Account[]).find((a) => a.id === accountId);
   const standardMonthlyPayment = allRows[0]?.payment_amount;
 
-  const today = new Date();
-  const nextIdx = allRows.findIndex((row) => new Date(row.payment_date) >= today);
+  const today = todayString(timezone);
+  const nextIdx = allRows.findIndex((row) => row.payment_date >= today);
   const nextStart = nextIdx === -1 ? 0 : nextIdx;
   const displayedRows =
     viewMode === "all"

@@ -56,6 +56,8 @@ class TransactionOut(BaseModel):
     is_cleared: bool
     category: Optional[CategoryOut] = None
     recurring_item: Optional[RecurringItemRef] = None
+    account_name: Optional[str] = None
+    account_color: Optional[str] = None
 
 
 class BulkDeleteRequest(BaseModel):

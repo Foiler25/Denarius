@@ -14,8 +14,8 @@ class AccountBreakdownItem(BaseModel):
 
 
 class NetWorthCurrent(BaseModel):
-    assets: Decimal
-    liabilities: Decimal
+    total_assets: Decimal
+    total_liabilities: Decimal
     net_worth: Decimal
     accounts: list[AccountBreakdownItem]
 

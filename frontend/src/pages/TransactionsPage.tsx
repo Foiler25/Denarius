@@ -25,7 +25,8 @@ import {
 import { useTransactions, useCreateTransaction, useDeleteTransaction, useUpdateTransaction } from "@/api/transactions";
 import { useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, todayString, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 const PAGE_SIZE = 20;
 
@@ -75,8 +76,8 @@ interface TxFormState {
   notes: string;
 }
 
-const emptyForm = (): TxFormState => ({
-  date: new Date().toISOString().slice(0, 10),
+const emptyForm = (tz: string): TxFormState => ({
+  date: todayString(tz),
   description: "",
   amount: "",
   type: "expense",
@@ -95,25 +96,25 @@ function Spinner() {
   );
 }
 
-function currentMonthDates() {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-  const end = today.toISOString().slice(0, 10);
-  return { start, end };
+function currentMonthDates(tz: string) {
+  const today = todayString(tz);
+  const start = today.slice(0, 7) + "-01";
+  return { start, end: today };
 }
 
 export default function TransactionsPage() {
+  const { timezone } = useSettingsStore();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("category_id") ?? "all");
-  const [startDate, setStartDate] = useState(() => currentMonthDates().start);
-  const [endDate, setEndDate] = useState(() => currentMonthDates().end);
+  const [startDate, setStartDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).start);
+  const [endDate, setEndDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).end);
   const [page, setPage] = useState(1);
 
   const [addOpen, setAddOpen] = useState(false);
-  const [form, setForm] = useState<TxFormState>(emptyForm());
+  const [form, setForm] = useState<TxFormState>(() => emptyForm(useSettingsStore.getState().timezone));
   const [formError, setFormError] = useState<string | null>(null);
   const [overridePromptOpen, setOverridePromptOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
@@ -165,7 +166,7 @@ export default function TransactionsPage() {
     try {
       await createTx.mutateAsync(payload);
       setAddOpen(false);
-      setForm(emptyForm());
+      setForm(emptyForm(timezone));
       setOverridePromptOpen(false);
       setPendingPayload(null);
     } catch (err: unknown) {
@@ -419,7 +420,7 @@ export default function TransactionsPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                const { start, end } = currentMonthDates();
+                const { start, end } = currentMonthDates(timezone);
                 setSearch(""); setAccountFilter("all"); setTypeFilter("all");
                 setCategoryFilter("all"); setStartDate(start); setEndDate(end); setPage(1);
               }}

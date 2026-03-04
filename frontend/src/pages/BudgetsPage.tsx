@@ -31,6 +31,7 @@ import {
 } from "@/api/budgets";
 import { useCategories } from "@/api/categories";
 import { formatCurrency, formatMonth, currentMonthParam, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 // ---- localStorage helpers ----
 
@@ -66,7 +67,7 @@ function saveKeepBudgetPref(v: boolean) {
 interface Budget {
   id: string;
   category_id: string;
-  category_name: string;
+  category: { id: string; name: string; color: string; icon?: string | null } | null;
   amount: number;
   actual_spent: number;
   month: string;
@@ -103,12 +104,14 @@ function stepMonth(month: string, delta: number): string {
 // ---- Main Page ----
 
 export default function BudgetsPage() {
-  const [month, setMonth] = useState<string>(currentMonthParam());
+  const { timezone } = useSettingsStore();
+
+  const [month, setMonth] = useState<string>(() => currentMonthParam(useSettingsStore.getState().timezone));
 
   // Total budget (per-month, localStorage)
   const [totalBudget, setTotalBudgetState] = useState<number | null>(() => {
     const all = getTotalBudgets();
-    return all[currentMonthParam()] ?? null;
+    return all[currentMonthParam(useSettingsStore.getState().timezone)] ?? null;
   });
   const [editingTotal, setEditingTotal] = useState(false);
   const [totalInput, setTotalInput] = useState("");
@@ -124,7 +127,7 @@ export default function BudgetsPage() {
 
   // Copy month dialog
   const [copyOpen, setCopyOpen] = useState(false);
-  const [copyTarget, setCopyTarget] = useState<string>(() => stepMonth(currentMonthParam(), 1));
+  const [copyTarget, setCopyTarget] = useState<string>(() => stepMonth(currentMonthParam(useSettingsStore.getState().timezone), 1));
   const [copyError, setCopyError] = useState<string | null>(null);
 
   // Inline edit
@@ -373,7 +376,7 @@ export default function BudgetsPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setMonth(currentMonthParam())}
+          onClick={() => setMonth(currentMonthParam(timezone))}
           className="text-xs text-muted-foreground"
         >
           Today
@@ -596,7 +599,13 @@ function BudgetRow({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm">{budget.category_name}</span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: budget.category?.color ?? "#6B7280" }}
+          />
+          <span className="font-medium text-sm truncate">{budget.category?.name ?? "Unknown"}</span>
+        </div>
         <div className="flex items-center gap-2 shrink-0">
           {isEditing ? (
             <>

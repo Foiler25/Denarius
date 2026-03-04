@@ -13,6 +13,8 @@ class AccountCreate(BaseModel):
     credit_limit: Optional[Decimal] = None
     sort_order: int = 0
     notes: Optional[str] = None
+    color: str = "#6B7280"
+    linked_mortgage_id: Optional[uuid.UUID] = None
 
 
 class AccountUpdate(BaseModel):
@@ -24,6 +26,8 @@ class AccountUpdate(BaseModel):
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     notes: Optional[str] = None
+    color: Optional[str] = None
+    linked_mortgage_id: Optional[uuid.UUID] = None
 
 
 class AccountBalanceUpdate(BaseModel):
@@ -42,3 +46,5 @@ class AccountOut(BaseModel):
     is_active: bool
     sort_order: int
     notes: Optional[str]
+    color: str
+    linked_mortgage_id: Optional[uuid.UUID] = None

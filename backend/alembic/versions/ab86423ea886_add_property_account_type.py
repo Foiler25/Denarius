@@ -19,7 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TYPE account_type ADD VALUE 'property'")
+    # ALTER TYPE ... ADD VALUE must run outside a transaction block (asyncpg requirement)
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE account_type ADD VALUE IF NOT EXISTS 'property'")
 
 
 def downgrade() -> None:

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowRight, CalendarClock, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, CalendarClock, Plus, TrendingUp, Wallet } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -14,10 +14,31 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { useDashboard } from "@/api/dashboard";
-import { useAccountBalanceHistory } from "@/api/accounts";
+import { useAccountBalanceHistory, useAccounts } from "@/api/accounts";
+import { useCategories } from "@/api/categories";
+import { useCreateTransaction } from "@/api/transactions";
 import { useDashboardStore } from "@/store/dashboardStore";
-import { formatCurrency, formatDate, formatMonth, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
+import { formatCurrency, formatDate, formatMonth, todayString, cn } from "@/lib/utils";
 
 const CHART_COLORS = [
   "#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6",
@@ -38,6 +59,7 @@ function formatChartDate(dateStr: string, granularity: "daily" | "monthly"): str
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
+
 
 function AccountBalancesChart() {
   const [days, setDays] = useState(365);
@@ -132,7 +154,7 @@ function AccountBalancesChart() {
                   key={account.id}
                   type="monotone"
                   dataKey={account.name}
-                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                  stroke={account.color || CHART_COLORS[i % CHART_COLORS.length]}
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 4 }}
@@ -168,8 +190,69 @@ function SkeletonCard() {
   );
 }
 
+interface TxFormState {
+  date: string;
+  description: string;
+  amount: string;
+  type: string;
+  account_id: string;
+  transfer_account_id: string;
+  category_id: string;
+  cleared: boolean;
+  notes: string;
+}
+
+const emptyTxForm = (tz: string): TxFormState => ({
+  date: todayString(tz),
+  description: "",
+  amount: "",
+  type: "expense",
+  account_id: "",
+  transfer_account_id: "",
+  category_id: "none",
+  cleared: false,
+  notes: "",
+});
+
 export default function DashboardPage() {
   const { data, isLoading, isError, error } = useDashboard();
+  const { data: accounts = [] } = useAccounts();
+  const { data: categories = [] } = useCategories();
+  const hiddenAccountIds = useDashboardStore((s) => s.hiddenAccountIds);
+  const visibleAccounts = accounts.filter((a) => a.is_active && !hiddenAccountIds.includes(a.id));
+  const { timezone } = useSettingsStore();
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState<TxFormState>(() => emptyTxForm(useSettingsStore.getState().timezone));
+  const [formError, setFormError] = useState<string | null>(null);
+  const createTx = useCreateTransaction();
+
+  async function handleAddSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setFormError(null);
+    if (!form.description.trim()) { setFormError("Description is required."); return; }
+    if (!form.amount || isNaN(parseFloat(form.amount))) { setFormError("Valid amount is required."); return; }
+    if (!form.account_id) { setFormError("Account is required."); return; }
+    if (form.type === "transfer" && !form.transfer_account_id) { setFormError("To account is required for transfers."); return; }
+    if (form.type === "transfer" && form.transfer_account_id === form.account_id) { setFormError("From and To accounts must be different."); return; }
+    try {
+      await createTx.mutateAsync({
+        date: form.date,
+        description: form.description,
+        amount: parseFloat(form.amount),
+        type: form.type,
+        account_id: form.account_id,
+        is_cleared: form.cleared,
+        notes: form.notes || null,
+        category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
+        transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
+      });
+      setAddOpen(false);
+      setForm(emptyTxForm(timezone));
+    } catch {
+      setFormError("Failed to add transaction. Please try again.");
+    }
+  }
 
   if (isLoading) {
     return (
@@ -200,12 +283,16 @@ export default function DashboardPage() {
   }
 
   const dashboard = data as {
-    net_worth: number;
-    total_assets: number;
-    total_liabilities: number;
-    monthly_spending: number;
-    monthly_budget: number;
-    upcoming_bills_count: number;
+    net_worth: {
+      net_worth: number;
+      total_assets: number;
+      total_liabilities: number;
+    };
+    monthly_spending: {
+      current_month: number;
+      prev_month: number;
+      budget_total: number;
+    };
     upcoming_bills: Array<{
       id: string;
       name: string;
@@ -220,27 +307,161 @@ export default function DashboardPage() {
       description: string;
       category_name?: string;
       account_name?: string;
+      account_color?: string;
       type: string;
       amount: number;
     }>;
-    over_budget_categories: Array<{
-      category_name: string;
-      budgeted: number;
-      spent: number;
+    over_budget_alerts: Array<{
+      category: { name: string } | null;
+      amount: number;
+      actual_spent: number;
     }>;
   };
 
   const spendingPct =
-    dashboard.monthly_budget > 0
-      ? Math.min(100, (dashboard.monthly_spending / dashboard.monthly_budget) * 100)
+    dashboard.monthly_spending.budget_total > 0
+      ? Math.min(100, (dashboard.monthly_spending.current_month / dashboard.monthly_spending.budget_total) * 100)
       : 0;
-  const overBudget = dashboard.monthly_spending > dashboard.monthly_budget && dashboard.monthly_budget > 0;
+  const overBudget =
+    dashboard.monthly_spending.current_month > dashboard.monthly_spending.budget_total &&
+    dashboard.monthly_spending.budget_total > 0;
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Your financial snapshot at a glance.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground text-sm">Your financial snapshot at a glance.</p>
+        </div>
+        <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) { setForm(emptyTxForm(timezone)); setFormError(null); } }}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Transaction
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Transaction</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAddSubmit}>
+              <div className="space-y-4 py-2">
+                {formError && (
+                  <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                    {formError}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Date</Label>
+                    <Input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Type</Label>
+                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, transfer_account_id: v !== "transfer" ? "" : form.transfer_account_id })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="expense">Expense</SelectItem>
+                        <SelectItem value="income">Income</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Description</Label>
+                  <Input
+                    placeholder="e.g. Grocery run"
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Amount ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{form.type === "transfer" ? "From Account" : "Account"}</Label>
+                    <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.type === "transfer" && (
+                  <div className="space-y-1">
+                    <Label>To Account</Label>
+                    <Select value={form.transfer_account_id} onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.filter((a) => a.id !== form.account_id).map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Uncategorized</SelectItem>
+                      {[...(categories as Array<{ id: string; name: string }>)].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <Input
+                    placeholder="Optional notes"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="dash-cleared"
+                    type="checkbox"
+                    checked={form.cleared}
+                    onChange={(e) => setForm({ ...form, cleared: e.target.checked })}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="dash-cleared">Cleared / Reconciled</Label>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={createTx.isPending}>
+                  {createTx.isPending ? "Saving…" : "Save Transaction"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Summary Cards */}
@@ -255,14 +476,14 @@ export default function DashboardPage() {
             <div
               className={cn(
                 "text-2xl font-bold",
-                dashboard.net_worth >= 0 ? "text-emerald-600" : "text-destructive"
+                dashboard.net_worth.net_worth >= 0 ? "text-emerald-600" : "text-destructive"
               )}
             >
-              {formatCurrency(dashboard.net_worth)}
+              {formatCurrency(dashboard.net_worth.net_worth)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatCurrency(dashboard.total_assets)} assets &minus;{" "}
-              {formatCurrency(dashboard.total_liabilities)} liabilities
+              {formatCurrency(dashboard.net_worth.total_assets)} assets &minus;{" "}
+              {formatCurrency(dashboard.net_worth.total_liabilities)} liabilities
             </p>
           </CardContent>
         </Card>
@@ -275,12 +496,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className={cn("text-2xl font-bold", overBudget ? "text-destructive" : "text-foreground")}>
-              {formatCurrency(dashboard.monthly_spending)}
+              {formatCurrency(dashboard.monthly_spending.current_month)}
             </div>
-            {dashboard.monthly_budget > 0 ? (
+            {dashboard.monthly_spending.budget_total > 0 ? (
               <>
                 <p className="text-xs text-muted-foreground mt-1">
-                  of {formatCurrency(dashboard.monthly_budget)} budgeted
+                  of {formatCurrency(dashboard.monthly_spending.budget_total)} budgeted
                 </p>
                 <div className="mt-2 h-1.5 w-full bg-muted rounded-full overflow-hidden">
                   <div
@@ -301,65 +522,29 @@ export default function DashboardPage() {
         {/* Upcoming Bills */}
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Bills</CardTitle>
-            <CalendarClock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dashboard.upcoming_bills_count}</div>
-            <p className="text-xs text-muted-foreground mt-1">due in the next 7 days</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Account Balances Chart */}
-      <AccountBalancesChart />
-
-      {/* Over Budget Alerts */}
-      {dashboard.over_budget_categories && dashboard.over_budget_categories.length > 0 && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="h-4 w-4 text-destructive" />
-            <span className="font-semibold text-destructive text-sm">Over Budget Alerts</span>
-          </div>
-          <div className="space-y-2">
-            {dashboard.over_budget_categories.map((cat) => (
-              <div key={cat.category_name} className="flex items-center justify-between text-sm">
-                <span className="font-medium">{cat.category_name}</span>
-                <span className="text-destructive">
-                  {formatCurrency(cat.spent)} / {formatCurrency(cat.budgeted)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upcoming Bills List */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle className="text-base">Upcoming Bills</CardTitle>
-              <CardDescription className="text-xs">Next 7 days</CardDescription>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Upcoming Bills</CardTitle>
+              <p className="text-xs text-muted-foreground">Next 7 days</p>
             </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/recurring" className="flex items-center gap-1 text-xs">
-                View all <ArrowRight className="h-3 w-3" />
+            <div className="flex items-center gap-2">
+              {dashboard.upcoming_bills.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{dashboard.upcoming_bills.length}</Badge>
+              )}
+              <Link to="/recurring" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                View all
               </Link>
-            </Button>
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
+            </div>
           </CardHeader>
           <CardContent>
-            {!dashboard.upcoming_bills || dashboard.upcoming_bills.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No upcoming bills in the next 7 days.</p>
+            {dashboard.upcoming_bills.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-1">No upcoming bills.</p>
             ) : (
-              <div className="space-y-3">
-                {dashboard.upcoming_bills.map((bill) => (
+              <div className="space-y-2">
+                {dashboard.upcoming_bills.slice(0, 3).map((bill) => (
                   <div key={bill.id} className="flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{bill.name}</span>
-                      <span className="text-xs text-muted-foreground">{formatDate(bill.next_due_date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate mr-2">{bill.name}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <Badge
                         variant="outline"
                         className={cn(
@@ -381,6 +566,86 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Account Balances Chart */}
+      <AccountBalancesChart />
+
+      {/* Over Budget Alerts */}
+      {dashboard.over_budget_alerts && dashboard.over_budget_alerts.length > 0 && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="h-4 w-4 text-destructive" />
+            <span className="font-semibold text-destructive text-sm">Over Budget Alerts</span>
+          </div>
+          <div className="space-y-2">
+            {dashboard.over_budget_alerts.map((cat) => (
+              <div key={cat.category?.name} className="flex items-center justify-between text-sm">
+                <span className="font-medium">{cat.category?.name}</span>
+                <span className="text-destructive">
+                  {formatCurrency(cat.actual_spent)} / {formatCurrency(cat.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Accounts & Balances */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base">Accounts</CardTitle>
+              <CardDescription className="text-xs">Current balances</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/networth" className="flex items-center gap-1 text-xs">
+                View all <ArrowRight className="h-3 w-3" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {visibleAccounts.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                No accounts selected.{" "}
+                <Link to="/settings" className="underline underline-offset-2">
+                  Settings → Preferences
+                </Link>
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {visibleAccounts.map((account) => {
+                  const isAsset = ["checking", "savings", "investment", "property"].includes(account.type);
+                  return (
+                    <div key={String(account.id)} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: account.color ?? "#6B7280" }}
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-medium truncate">{account.name}</span>
+                          <span className="text-xs text-muted-foreground capitalize">
+                            {account.type.replace("_", " ")}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-sm font-semibold ml-4 shrink-0",
+                          isAsset ? "text-emerald-600" : "text-destructive"
+                        )}
+                      >
+                        {formatCurrency(Number(account.current_balance))}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -411,7 +676,12 @@ export default function DashboardPage() {
                       <span className="text-xs text-muted-foreground">
                         {formatDate(tx.date)}
                         {tx.category_name && ` · ${tx.category_name}`}
-                        {tx.account_name && ` · ${tx.account_name}`}
+                        {tx.account_name && (
+                          <>
+                            {" · "}
+                            <span style={{ color: tx.account_color ?? undefined }}>{tx.account_name}</span>
+                          </>
+                        )}
                       </span>
                     </div>
                     <span

@@ -33,7 +33,14 @@ export function firstOfMonth(d: Date = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
-export function currentMonthParam(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+/** Returns today's date as YYYY-MM-DD in the given IANA timezone. */
+export function todayString(tz: string): string {
+  // en-CA locale produces YYYY-MM-DD format natively
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+}
+
+/** Returns the first day of the current month as YYYY-MM-DD in the given IANA timezone. */
+export function currentMonthParam(tz: string): string {
+  const today = todayString(tz);
+  return today.slice(0, 7) + "-01";
 }

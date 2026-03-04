@@ -46,3 +46,11 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     category: Mapped["Category"] = relationship("Category")
     creator: Mapped["User"] = relationship("User")
     recurring_item: Mapped["RecurringItem | None"] = relationship("RecurringItem", foreign_keys=[recurring_item_id], lazy="noload")
+
+    @property
+    def account_name(self) -> str | None:
+        return self.account.name if self.account else None
+
+    @property
+    def account_color(self) -> str | None:
+        return self.account.color if self.account else None

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Moon, Sun } from "lucide-react";
+import { Plus, Pencil, Trash2, Moon, Sun, Globe } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useThemeStore } from "@/store/themeStore";
+import { useSettingsStore } from "@/store/settingsStore";
+import { TIMEZONES } from "@/lib/timezones";
 import {
   Select,
   SelectTrigger,
@@ -50,6 +52,8 @@ interface Account {
   is_active: boolean;
   institution?: string;
   notes?: string;
+  color?: string;
+  linked_mortgage_id?: string;
 }
 
 interface Category {
@@ -86,6 +90,7 @@ interface AccountFormState {
   institution: string;
   account_number: string;
   notes: string;
+  color: string;
   // Mortgage/Loan fields
   original_principal: string;
   interest_rate: string;
@@ -93,6 +98,11 @@ interface AccountFormState {
   origination_date: string;
   extra_payment: string;
   loan_type: string;
+  // Property → mortgage link
+  link_mortgage: boolean;
+  mortgage_link_mode: "existing" | "new";
+  linked_mortgage_id: string;
+  new_mortgage_name: string;
 }
 
 const emptyAccountForm = (): AccountFormState => ({
@@ -102,12 +112,17 @@ const emptyAccountForm = (): AccountFormState => ({
   institution: "",
   account_number: "",
   notes: "",
+  color: "#6B7280",
   original_principal: "",
   interest_rate: "",
   term_months: "",
   origination_date: "",
   extra_payment: "",
   loan_type: "",
+  link_mortgage: false,
+  mortgage_link_mode: "existing",
+  linked_mortgage_id: "",
+  new_mortgage_name: "",
 });
 
 const LOAN_TYPES = [
@@ -144,8 +159,10 @@ function AccountsTab() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const accountList: Account[] = Array.isArray(accounts) ? accounts : [];
+  const mortgageAccounts = accountList.filter((a) => a.type === "mortgage");
   const isMortgage = MORTGAGE_TYPES.includes(form.type);
 
   function openAdd() {
@@ -164,12 +181,17 @@ function AccountsTab() {
       institution: account.institution ?? "",
       account_number: "",
       notes: account.notes ?? "",
+      color: account.color ?? "#6B7280",
       original_principal: "",
       interest_rate: "",
       term_months: "",
       origination_date: "",
       extra_payment: "",
       loan_type: "",
+      link_mortgage: !!account.linked_mortgage_id,
+      mortgage_link_mode: "existing",
+      linked_mortgage_id: account.linked_mortgage_id ?? "",
+      new_mortgage_name: "",
     });
     setFormError(null);
     setAddOpen(true);
@@ -200,12 +222,25 @@ function AccountsTab() {
     if (!form.name.trim()) { setFormError("Account name is required."); return; }
     if (isNaN(parseFloat(form.balance))) { setFormError("Enter a valid balance."); return; }
 
+    // Determine linked_mortgage_id for property accounts
+    let resolvedLinkedMortgageId: string | null = null;
+    if (form.type === "property" && form.link_mortgage) {
+      if (form.mortgage_link_mode === "existing") {
+        resolvedLinkedMortgageId = form.linked_mortgage_id || null;
+      }
+      // "new" case: we'll create the mortgage after saving the property
+    } else if (form.type === "property" && !form.link_mortgage) {
+      resolvedLinkedMortgageId = null; // explicit unlink when editing
+    }
+
     const payload: Record<string, unknown> = {
       name: form.name,
       type: form.type,
       current_balance: parseFloat(form.balance),
       institution: form.institution || undefined,
       notes: form.notes || undefined,
+      color: form.color,
+      linked_mortgage_id: resolvedLinkedMortgageId,
     };
 
     try {
@@ -247,9 +282,37 @@ function AccountsTab() {
         }
       }
 
+      // Create new linked mortgage for property accounts
+      if (form.type === "property" && form.link_mortgage && form.mortgage_link_mode === "new") {
+        const mp: Record<string, unknown> = {};
+        if (form.original_principal) mp.original_principal = parseFloat(form.original_principal);
+        if (form.interest_rate) mp.interest_rate = parseFloat(form.interest_rate);
+        if (form.term_months) mp.term_months = parseInt(form.term_months);
+        if (form.origination_date) mp.start_date = form.origination_date;
+        if (form.extra_payment) mp.extra_payment = parseFloat(form.extra_payment);
+
+        if (mp.original_principal && mp.interest_rate && mp.term_months && mp.start_date) {
+          try {
+            const mortgageName = form.new_mortgage_name.trim() || `${form.name} Mortgage`;
+            const newMortgageResult = await createAccount.mutateAsync({
+              name: mortgageName,
+              type: "mortgage" as any,
+              current_balance: -(parseFloat(form.original_principal) || 0),
+            });
+            const newMortgageId = newMortgageResult.id;
+            await api.post(`/accounts/${newMortgageId}/mortgage`, mp);
+            await api.put(`/accounts/${savedId}`, { linked_mortgage_id: newMortgageId });
+            queryClient.invalidateQueries({ queryKey: ["accounts"] });
+          } catch {
+            // non-fatal: mortgage creation failure won't block property save
+          }
+        }
+      }
+
       setAddOpen(false);
-    } catch {
-      setFormError("Failed to save account. Please try again.");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setFormError(detail ?? "Failed to save account. Please try again.");
     }
   }
 
@@ -259,8 +322,15 @@ function AccountsTab() {
       await deleteAccount.mutateAsync();
       setDeleteOpen(false);
       setDeleteId(null);
-    } catch {
-      setDeleteOpen(false);
+      setDeleteError(null);
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail;
+      if (err?.response?.status === 409 && msg) {
+        setDeleteError(msg);
+      } else {
+        setDeleteOpen(false);
+        setDeleteError(null);
+      }
     }
   }
 
@@ -303,10 +373,16 @@ function AccountsTab() {
                 {accountList.map((account) => (
                   <tr key={account.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-3 font-medium">
-                      {account.name}
-                      {!account.is_active && (
-                        <Badge variant="outline" className="ml-2 text-xs text-muted-foreground">Inactive</Badge>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: account.color ?? "#6B7280" }}
+                        />
+                        <span>{account.name}</span>
+                        {!account.is_active && (
+                          <Badge variant="outline" className="text-xs text-muted-foreground">Inactive</Badge>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground capitalize">{account.type.replace("_", " ")}</td>
                     <td className={cn("px-4 py-3 text-right font-semibold", account.current_balance < 0 ? "text-destructive" : "text-foreground")}>
@@ -370,6 +446,18 @@ function AccountsTab() {
                   </Select>
                 </div>
                 <div className="space-y-1">
+                  <Label>Color</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={form.color}
+                      onChange={(e) => setForm({ ...form, color: e.target.value })}
+                      className="h-9 w-14 rounded border border-input cursor-pointer"
+                    />
+                    <span className="text-sm text-muted-foreground">{form.color}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
                   <Label>{form.type === 'property' ? 'Property Value ($)' : 'Current Balance ($)'}</Label>
                   <Input
                     type="number"
@@ -410,6 +498,126 @@ function AccountsTab() {
                   />
                 </div>
               </div>
+
+              {/* Property → Mortgage Link */}
+              {form.type === "property" && (
+                <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Link to Mortgage</p>
+                      <p className="text-xs text-muted-foreground">Associate this property with a mortgage account</p>
+                    </div>
+                    <Switch
+                      checked={form.link_mortgage}
+                      onCheckedChange={(v) => setForm({ ...form, link_mortgage: v })}
+                    />
+                  </div>
+
+                  {form.link_mortgage && (
+                    <div className="space-y-3 pt-1">
+                      {/* Mode selector */}
+                      <div className="flex gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input
+                            type="radio"
+                            name="mortgage_link_mode"
+                            value="existing"
+                            checked={form.mortgage_link_mode === "existing"}
+                            onChange={() => setForm({ ...form, mortgage_link_mode: "existing" })}
+                          />
+                          Link existing
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input
+                            type="radio"
+                            name="mortgage_link_mode"
+                            value="new"
+                            checked={form.mortgage_link_mode === "new"}
+                            onChange={() => setForm({ ...form, mortgage_link_mode: "new" })}
+                          />
+                          Create new
+                        </label>
+                      </div>
+
+                      {form.mortgage_link_mode === "existing" && (
+                        <div className="space-y-1">
+                          <Label>Mortgage Account</Label>
+                          {mortgageAccounts.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No mortgage accounts found. Create one first or use "Create new".</p>
+                          ) : (
+                            <Select
+                              value={form.linked_mortgage_id}
+                              onValueChange={(v) => setForm({ ...form, linked_mortgage_id: v })}
+                            >
+                              <SelectTrigger><SelectValue placeholder="Select mortgage…" /></SelectTrigger>
+                              <SelectContent>
+                                {mortgageAccounts.map((a) => (
+                                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      )}
+
+                      {form.mortgage_link_mode === "new" && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <Label>Mortgage Account Name</Label>
+                            <Input
+                              placeholder={`${form.name || "Property"} Mortgage`}
+                              value={form.new_mortgage_name}
+                              onChange={(e) => setForm({ ...form, new_mortgage_name: e.target.value })}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <Label>Original Principal ($)</Label>
+                              <Input
+                                type="number" step="0.01" placeholder="e.g. 350000"
+                                value={form.original_principal}
+                                onChange={(e) => setForm({ ...form, original_principal: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Interest Rate (%)</Label>
+                              <Input
+                                type="number" step="0.001" placeholder="e.g. 6.5"
+                                value={form.interest_rate}
+                                onChange={(e) => setForm({ ...form, interest_rate: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Term (months)</Label>
+                              <Input
+                                type="number" step="1" placeholder="e.g. 360"
+                                value={form.term_months}
+                                onChange={(e) => setForm({ ...form, term_months: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label>Extra Monthly Payment ($)</Label>
+                              <Input
+                                type="number" step="0.01" placeholder="e.g. 200"
+                                value={form.extra_payment}
+                                onChange={(e) => setForm({ ...form, extra_payment: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1 col-span-2">
+                              <Label>Origination Date</Label>
+                              <Input
+                                type="date"
+                                value={form.origination_date}
+                                onChange={(e) => setForm({ ...form, origination_date: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Mortgage/Loan Detail Fields */}
               {isMortgage && (
@@ -499,7 +707,7 @@ function AccountsTab() {
       </Dialog>
 
       {/* Delete Confirm */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setDeleteError(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Account?</DialogTitle>
@@ -507,6 +715,11 @@ function AccountsTab() {
           <p className="text-sm text-muted-foreground">
             This will permanently delete the account and may affect related transactions.
           </p>
+          {deleteError && (
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+              {deleteError}
+            </div>
+          )}
           <DialogFooter className="mt-4">
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>
@@ -925,9 +1138,19 @@ function UserRow({ user, isCurrentUser }: { user: User; isCurrentUser: boolean }
 // ---- Preferences Tab ----
 function PreferencesTab() {
   const { isDark, toggle } = useThemeStore();
+  const { timezone, setTimezone } = useSettingsStore();
   const { hiddenAccountIds, toggleAccount } = useDashboardStore();
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const accountList: Account[] = Array.isArray(accounts) ? accounts : [];
+
+  const [tzSearch, setTzSearch] = useState("");
+  const filteredTzs = tzSearch.trim()
+    ? TIMEZONES.filter((tz) =>
+        tz.label.toLowerCase().includes(tzSearch.toLowerCase()) ||
+        tz.value.toLowerCase().includes(tzSearch.toLowerCase())
+      )
+    : TIMEZONES;
+  const currentTzLabel = TIMEZONES.find((t) => t.value === timezone)?.label ?? timezone;
 
   return (
     <div className="space-y-4">
@@ -949,6 +1172,50 @@ function PreferencesTab() {
               </div>
             </div>
             <Switch checked={isDark} onCheckedChange={toggle} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Date &amp; Time
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-start gap-3">
+            <Globe className="h-4 w-4 text-muted-foreground mt-2.5 shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <p className="text-sm font-medium">Timezone</p>
+              <p className="text-xs text-muted-foreground">
+                Controls which day "today" falls on and how dates default throughout the app.
+              </p>
+              <Select value={timezone} onValueChange={setTimezone}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>{currentTzLabel}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-2 pb-1 pt-1">
+                    <input
+                      className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+                      placeholder="Search timezones…"
+                      value={tzSearch}
+                      onChange={(e) => setTzSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  {filteredTzs.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">No results.</div>
+                  ) : (
+                    filteredTzs.map((tz) => (
+                      <SelectItem key={tz.value} value={tz.value}>
+                        {tz.label}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>

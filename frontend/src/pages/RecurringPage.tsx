@@ -31,7 +31,8 @@ import {
 } from "@/api/recurring";
 import { useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { formatCurrency, formatDate, todayString, cn } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settingsStore";
 
 interface RecurringItem {
   id: string;
@@ -74,7 +75,7 @@ interface RecurringFormState {
   keyword_match: string;
 }
 
-const emptyForm = (): RecurringFormState => ({
+const emptyForm = (tz: string): RecurringFormState => ({
   name: "",
   amount: "",
   amount_min: "",
@@ -82,7 +83,7 @@ const emptyForm = (): RecurringFormState => ({
   is_variable: false,
   type: "bill",
   frequency: "monthly",
-  start_date: new Date().toISOString().slice(0, 10),
+  start_date: todayString(tz),
   account_id: "none",
   category_id: "none",
   notes: "",
@@ -117,16 +118,17 @@ function RecurringTab({
   type: "subscription" | "bill" | "income";
   label: string;
 }) {
+  const { timezone } = useSettingsStore();
   const [showInactive, setShowInactive] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<RecurringItem | null>(null);
-  const [form, setForm] = useState<RecurringFormState>(emptyForm());
+  const [form, setForm] = useState<RecurringFormState>(() => emptyForm(useSettingsStore.getState().timezone));
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [markPaidId, setMarkPaidId] = useState<string | null>(null);
   const [markPaidOpen, setMarkPaidOpen] = useState(false);
-  const [paidDate, setPaidDate] = useState(new Date().toISOString().slice(0, 10));
+  const [paidDate, setPaidDate] = useState(() => todayString(useSettingsStore.getState().timezone));
   const [paidAmount, setPaidAmount] = useState("");
 
   const { data: items = [], isLoading, isError } = useRecurring(type, !showInactive);
@@ -141,7 +143,7 @@ function RecurringTab({
 
   function openAdd() {
     setEditItem(null);
-    setForm({ ...emptyForm(), type });
+    setForm({ ...emptyForm(timezone), type });
     setFormError(null);
     setFormOpen(true);
   }
@@ -269,7 +271,7 @@ function RecurringTab({
               onDelete={() => { setDeleteId(item.id); setDeleteOpen(true); }}
               onMarkPaid={() => {
                 setMarkPaidId(item.id);
-                setPaidDate(new Date().toISOString().slice(0, 10));
+                setPaidDate(todayString(timezone));
                 setPaidAmount(String(item.amount));
                 setMarkPaidOpen(true);
               }}

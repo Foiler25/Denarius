@@ -21,7 +21,15 @@
       "mcp__grepai__grepai_index_status",
       "mcp__grepai__grepai_list_workspaces",
       "mcp__grepai__grepai_search",
-      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)"
+      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(docker compose exec db psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
+      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
+      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT * FROM alembic_version;\")",
+      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"ALTER TYPE account_type ADD VALUE ''property'';\")",
+      "Bash(docker compose exec backend pip show alembic)",
+      "Bash(docker compose restart backend)",
+      "Bash(xargs ls -lh)"
     ]
   }
 }
