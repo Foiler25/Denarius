@@ -7,6 +7,7 @@ import TransactionsPage from "@/pages/TransactionsPage";
 import BudgetsPage from "@/pages/BudgetsPage";
 import RecurringPage from "@/pages/RecurringPage";
 import MortgagePage from "@/pages/MortgagePage";
+import LoanPage from "@/pages/LoanPage";
 import NetWorthPage from "@/pages/NetWorthPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/recurring" element={<RecurringPage />} />
           <Route path="/mortgage" element={<MortgagePage />} />
+          <Route path="/loans" element={<LoanPage />} />
           <Route path="/networth" element={<NetWorthPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />

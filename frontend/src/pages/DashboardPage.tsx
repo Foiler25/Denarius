@@ -1,10 +1,150 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertCircle, ArrowRight, CalendarClock, TrendingUp, Wallet } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDashboard } from "@/api/dashboard";
-import { formatCurrency, formatDate, cn } from "@/lib/utils";
+import { useAccountBalanceHistory } from "@/api/accounts";
+import { useDashboardStore } from "@/store/dashboardStore";
+import { formatCurrency, formatDate, formatMonth, cn } from "@/lib/utils";
+
+const CHART_COLORS = [
+  "#6366f1", "#10b981", "#f59e0b", "#ef4444", "#3b82f6",
+  "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
+];
+
+const TIME_RANGES = [
+  { label: "1W", days: 7 },
+  { label: "1M", days: 30 },
+  { label: "3M", days: 90 },
+  { label: "6M", days: 180 },
+  { label: "12M", days: 365 },
+  { label: "24M", days: 730 },
+] as const;
+
+function formatChartDate(dateStr: string, granularity: "daily" | "monthly"): string {
+  if (granularity === "monthly") return formatMonth(dateStr);
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function AccountBalancesChart() {
+  const [days, setDays] = useState(365);
+  const { data, isLoading } = useAccountBalanceHistory(days);
+  const hiddenAccountIds = useDashboardStore((s) => s.hiddenAccountIds);
+
+  const granularity = data?.granularity ?? "monthly";
+  const visibleAccounts = (data?.accounts ?? []).filter(
+    (a) => !hiddenAccountIds.includes(a.id)
+  );
+
+  const chartData = (data?.dates ?? []).map((date, idx) => {
+    const point: Record<string, string | number> = { date: formatChartDate(date, granularity) };
+    for (const account of visibleAccounts) {
+      point[account.name] = account.balances[idx];
+    }
+    return point;
+  });
+
+  const xInterval = Math.max(0, Math.floor(chartData.length / 6) - 1);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <div>
+          <CardTitle className="text-base">Account Balances Over Time</CardTitle>
+          <CardDescription className="text-xs">
+            {visibleAccounts.length === 0
+              ? "No accounts visible — update in Settings → Preferences"
+              : `${visibleAccounts.length} account${visibleAccounts.length !== 1 ? "s" : ""}`}
+          </CardDescription>
+        </div>
+        <div className="flex gap-1">
+          {TIME_RANGES.map(({ label, days: d }) => (
+            <Button
+              key={label}
+              variant={days === d ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDays(d)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="h-64 flex items-center justify-center">
+            <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+          </div>
+        ) : visibleAccounts.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-sm text-muted-foreground">
+            No accounts selected. Go to{" "}
+            <Link to="/settings" className="ml-1 underline underline-offset-2">
+              Settings → Preferences
+            </Link>{" "}
+            to choose which accounts to display.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                interval={xInterval}
+              />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) =>
+                  new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    notation: "compact",
+                    maximumFractionDigits: 1,
+                  }).format(v)
+                }
+                width={64}
+              />
+              <Tooltip
+                formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                contentStyle={{ fontSize: 12 }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              {visibleAccounts.map((account, i) => (
+                <Line
+                  key={account.id}
+                  type="monotone"
+                  dataKey={account.name}
+                  stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function Spinner() {
   return (
@@ -170,6 +310,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Account Balances Chart */}
+      <AccountBalancesChart />
 
       {/* Over Budget Alerts */}
       {dashboard.over_budget_categories && dashboard.over_budget_categories.length > 0 && (

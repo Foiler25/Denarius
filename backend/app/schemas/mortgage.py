@@ -11,6 +11,7 @@ class MortgageCreate(BaseModel):
     term_months: int
     start_date: date
     extra_payment: Decimal = Decimal("0.00")
+    loan_type: Optional[str] = None
 
 
 class MortgageUpdate(BaseModel):
@@ -19,6 +20,7 @@ class MortgageUpdate(BaseModel):
     term_months: Optional[int] = None
     start_date: Optional[date] = None
     extra_payment: Optional[Decimal] = None
+    loan_type: Optional[str] = None
 
 
 class MortgageOut(BaseModel):
@@ -31,6 +33,7 @@ class MortgageOut(BaseModel):
     term_months: int
     start_date: date
     extra_payment: Decimal
+    loan_type: Optional[str] = None
 
 
 class AmortizationRow(BaseModel):

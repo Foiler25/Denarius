@@ -11,6 +11,7 @@ from app.models.recurring_item import RecurringItem, RecurringType
 from app.models.user import User
 from app.schemas.recurring_item import MarkPaidRequest, RecurringCreate, RecurringOut, RecurringUpdate
 from app.services.recurring_service import mark_paid
+from app.utils.date_utils import rewind_by_frequency
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -20,6 +21,9 @@ def _with_days_until_due(item: RecurringItem) -> RecurringOut:
     days = (item.next_due_date - today).days
     out = RecurringOut.model_validate(item)
     out.days_until_due = days
+    if item.last_paid_date is not None:
+        period_start = rewind_by_frequency(item.next_due_date, item.frequency)
+        out.is_paid_current_period = item.last_paid_date >= period_start
     return out
 
 

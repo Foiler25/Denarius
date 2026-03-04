@@ -60,3 +60,25 @@ export function useDeleteAccount(id: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: accountsKeys.all }),
   });
 }
+
+export interface AccountBalanceHistoryAccount {
+  id: string;
+  name: string;
+  type: string;
+  balances: number[];
+}
+
+export interface AccountBalanceHistory {
+  granularity: "daily" | "monthly";
+  dates: string[];
+  accounts: AccountBalanceHistoryAccount[];
+}
+
+export function useAccountBalanceHistory(days = 365) {
+  return useQuery({
+    queryKey: ["accounts", "balance-history", days],
+    queryFn: (): Promise<AccountBalanceHistory> =>
+      api.get(`/accounts/balance-history?days=${days}`).then((r) => r.data),
+    staleTime: 60_000,
+  });
+}

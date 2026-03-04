@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Lock, Plus, Pencil, Trash2, Moon, Sun } from "lucide-react";
+import { Plus, Pencil, Trash2, Moon, Sun } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,7 @@ import {
   useUpdateAccount,
   useDeleteAccount,
 } from "@/api/accounts";
+import { useDashboardStore } from "@/store/dashboardStore";
 import {
   useCategories,
   useCreateCategory,
@@ -84,12 +85,13 @@ interface AccountFormState {
   institution: string;
   account_number: string;
   notes: string;
-  // Mortgage fields
+  // Mortgage/Loan fields
   original_principal: string;
   interest_rate: string;
   term_months: string;
   origination_date: string;
   extra_payment: string;
+  loan_type: string;
 }
 
 const emptyAccountForm = (): AccountFormState => ({
@@ -104,7 +106,17 @@ const emptyAccountForm = (): AccountFormState => ({
   term_months: "",
   origination_date: "",
   extra_payment: "",
+  loan_type: "",
 });
+
+const LOAN_TYPES = [
+  { value: "auto", label: "Auto" },
+  { value: "student", label: "Student" },
+  { value: "personal", label: "Personal" },
+  { value: "business", label: "Business" },
+  { value: "home_equity", label: "Home Equity" },
+  { value: "other", label: "Other" },
+];
 
 const MORTGAGE_TYPES = ["mortgage", "loan"];
 const ACCOUNT_TYPES = [
@@ -154,6 +166,7 @@ function AccountsTab() {
       term_months: "",
       origination_date: "",
       extra_payment: "",
+      loan_type: "",
     });
     setFormError(null);
     setAddOpen(true);
@@ -167,6 +180,7 @@ function AccountsTab() {
           term_months: String(data.term_months),
           origination_date: data.start_date,
           extra_payment: String(data.extra_payment),
+          loan_type: data.loan_type ?? "",
         }));
       } catch {
         // no mortgage details yet — leave fields empty
@@ -201,7 +215,7 @@ function AccountsTab() {
         savedId = result.id;
       }
 
-      // Handle mortgage details via separate endpoint
+      // Handle mortgage/loan details via separate endpoint
       if (isMortgage) {
         const mp: Record<string, unknown> = {};
         if (form.original_principal) mp.original_principal = parseFloat(form.original_principal);
@@ -209,6 +223,7 @@ function AccountsTab() {
         if (form.term_months) mp.term_months = parseInt(form.term_months);
         if (form.origination_date) mp.start_date = form.origination_date;
         if (form.extra_payment) mp.extra_payment = parseFloat(form.extra_payment);
+        if (form.type === "loan" && form.loan_type) mp.loan_type = form.loan_type;
         if (Object.keys(mp).length > 0) {
           try {
             if (editAccount) {
@@ -394,9 +409,25 @@ function AccountsTab() {
               {isMortgage && (
                 <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Mortgage / Loan Details
+                    {form.type === "loan" ? "Loan Details" : "Mortgage Details"}
                   </p>
                   <div className="grid grid-cols-2 gap-3">
+                    {form.type === "loan" && (
+                      <div className="space-y-1 col-span-2">
+                        <Label>Loan Type</Label>
+                        <Select
+                          value={form.loan_type}
+                          onValueChange={(v) => setForm({ ...form, loan_type: v })}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Select loan type…" /></SelectTrigger>
+                          <SelectContent>
+                            {LOAN_TYPES.map((lt) => (
+                              <SelectItem key={lt.value} value={lt.value}>{lt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="space-y-1">
                       <Label>Original Principal ($)</Label>
                       <Input
@@ -609,28 +640,23 @@ function CategoriesTab() {
                                 />
                               )}
                               <span className="font-medium">{cat.name}</span>
-                              {cat.is_system && (
-                                <span title="System category"><Lock className="h-3 w-3 text-muted-foreground" /></span>
-                              )}
                             </div>
                           </td>
                           <td className="px-4 py-3 text-muted-foreground capitalize">{cat.type}</td>
                           <td className="px-4 py-3 text-right">
-                            {!cat.is_system && (
-                              <div className="flex items-center justify-end gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cat)}>
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                  onClick={() => { setDeleteId(cat.id); setDeleteOpen(true); }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            )}
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cat)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => { setDeleteId(cat.id); setDeleteOpen(true); }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -871,6 +897,9 @@ function UserRow({ user, isCurrentUser }: { user: User; isCurrentUser: boolean }
 // ---- Preferences Tab ----
 function PreferencesTab() {
   const { isDark, toggle } = useThemeStore();
+  const { hiddenAccountIds, toggleAccount } = useDashboardStore();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  const accountList: Account[] = Array.isArray(accounts) ? accounts : [];
 
   return (
     <div className="space-y-4">
@@ -893,6 +922,44 @@ function PreferencesTab() {
             </div>
             <Switch checked={isDark} onCheckedChange={toggle} />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Dashboard Balance Chart
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Choose which accounts appear in the balance history chart on the dashboard.
+          </p>
+          {accountsLoading ? (
+            <div className="py-4 flex items-center justify-center">
+              <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            </div>
+          ) : accountList.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No accounts found.</p>
+          ) : (
+            <div className="space-y-2">
+              {accountList.map((account) => {
+                const isVisible = !hiddenAccountIds.includes(account.id);
+                return (
+                  <div key={account.id} className="flex items-center justify-between py-1">
+                    <div>
+                      <p className="text-sm font-medium">{account.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{account.type}</p>
+                    </div>
+                    <Switch
+                      checked={isVisible}
+                      onCheckedChange={() => toggleAccount(account.id)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -1,9 +1,0 @@
-On the dashboard add a chart that shows current balances over time for all accounts and let the user select which accounts to show/hide in the settings. 
-
-When adding a category budget it says failed but actually succeeds after refreshing page. 
-
-The category shows that it is over budget even though it is not, example a 400 budget with 50 spent is showing 350 over budget under the bar instead of 350 remaining. 
-
-Adding subscriptions/bills/income fails to save even with all fields filled. 
-
-The "Add Income" button is cut off and only showing "Add Incom"

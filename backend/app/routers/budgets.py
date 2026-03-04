@@ -94,8 +94,10 @@ async def create_or_update_budget(
         budget = Budget(category_id=data.category_id, month=month_start, amount=data.amount)
         db.add(budget)
     await db.commit()
-    await db.refresh(budget)
-    return budget
+    result = await db.execute(
+        select(Budget).options(selectinload(Budget.category)).where(Budget.id == budget.id)
+    )
+    return result.scalar_one()
 
 
 @router.get("/summary", response_model=BudgetSummary)

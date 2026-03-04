@@ -1,14 +1,16 @@
 import uuid
+from collections import defaultdict
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
 from app.models.account import Account
-from app.models.transaction import Transaction
+from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.account import AccountBalanceUpdate, AccountCreate, AccountOut, AccountUpdate
 from app.schemas.transaction import TransactionOut
@@ -41,6 +43,93 @@ async def create_account(
     await db.commit()
     await db.refresh(account)
     return account
+
+
+@router.get("/balance-history")
+async def get_balance_history(
+    days: int = Query(365, ge=7, le=730),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from datetime import timedelta
+
+    today = date.today()
+
+    # ≤90 days → daily granularity; >90 days → monthly (approximate months from days)
+    if days <= 90:
+        granularity = "daily"
+        date_points = [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
+        labels = [d.strftime("%Y-%m-%d") for d in date_points]
+        oldest_cutoff = date_points[0]
+    else:
+        granularity = "monthly"
+        approx_months = max(1, round(days / 30))
+        current_month_start = today.replace(day=1)
+        month_starts = [current_month_start - relativedelta(months=i) for i in range(approx_months - 1, -1, -1)]
+        # Use last day of each month as the date point (today for the current month)
+        date_points = []
+        for i, ms in enumerate(month_starts):
+            if i == len(month_starts) - 1:
+                date_points.append(today)
+            else:
+                date_points.append(month_starts[i + 1] - timedelta(days=1))
+        labels = [ms.strftime("%Y-%m") for ms in month_starts]
+        oldest_cutoff = month_starts[0]
+
+    acct_result = await db.execute(
+        select(Account)
+        .where(Account.is_active == True, Account.deleted_at == None)
+        .order_by(Account.sort_order, Account.name)
+    )
+    accounts = acct_result.scalars().all()
+
+    if not accounts:
+        return {"granularity": granularity, "dates": [], "accounts": []}
+
+    account_ids = [a.id for a in accounts]
+
+    txn_result = await db.execute(
+        select(Transaction.account_id, Transaction.amount, Transaction.type, Transaction.date)
+        .where(
+            Transaction.deleted_at == None,
+            Transaction.date >= oldest_cutoff,
+            Transaction.account_id.in_(account_ids),
+        )
+    )
+    transactions = txn_result.all()
+
+    txns_by_account: dict = defaultdict(list)
+    for txn in transactions:
+        txns_by_account[txn.account_id].append(txn)
+
+    result_accounts = []
+    for account in accounts:
+        account_txns = txns_by_account.get(account.id, [])
+        current_bal = float(account.current_balance)
+
+        balances = []
+        for date_point in date_points:
+            adjustment = 0.0
+            for txn in account_txns:
+                if txn.date > date_point:
+                    if txn.type == TransactionType.income:
+                        adjustment -= float(txn.amount)
+                    else:
+                        adjustment += float(txn.amount)
+            balances.append(round(current_bal + adjustment, 2))
+
+        result_accounts.append({
+            "id": str(account.id),
+            "name": account.name,
+            "type": account.type,
+            "balances": balances,
+        })
+
+    return {
+        "granularity": granularity,
+        "dates": labels,
+        "accounts": result_accounts,
+    }
 
 
 @router.get("/{account_id}", response_model=AccountOut)

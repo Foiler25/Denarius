@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Pencil, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -409,6 +409,7 @@ export default function TransactionsPage() {
                       key={tx.id}
                       tx={tx}
                       accounts={accounts as Account[]}
+                      categories={categories as Category[]}
                       onDelete={() => { setDeleteId(tx.id); setDeleteOpen(true); }}
                     />
                   ))}
@@ -467,9 +468,22 @@ export default function TransactionsPage() {
   );
 }
 
-function TransactionRow({ tx, accounts, onDelete }: { tx: Transaction; accounts: Account[]; onDelete: () => void }) {
+function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transaction; accounts: Account[]; categories: Category[]; onDelete: () => void }) {
   const updateTx = useUpdateTransaction(tx.id);
   const [cleared, setCleared] = useState(tx.is_cleared);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState<TxFormState>({
+    date: tx.date,
+    description: tx.description,
+    amount: String(tx.amount),
+    type: tx.type,
+    account_id: tx.account_id,
+    transfer_account_id: tx.transfer_account_id ?? "",
+    category_id: tx.category_id ?? "none",
+    cleared: tx.is_cleared,
+    notes: tx.notes ?? "",
+  });
+  const [editError, setEditError] = useState<string | null>(null);
   const accountName = accounts.find((a) => a.id === tx.account_id)?.name ?? "—";
 
   async function handleClearedChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -479,6 +493,32 @@ function TransactionRow({ tx, accounts, onDelete }: { tx: Transaction; accounts:
       await updateTx.mutateAsync({ is_cleared: newVal });
     } catch {
       setCleared(!newVal);
+    }
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError(null);
+    if (!editForm.description.trim()) { setEditError("Description is required."); return; }
+    if (!editForm.amount || isNaN(parseFloat(editForm.amount))) { setEditError("Valid amount is required."); return; }
+    if (!editForm.account_id) { setEditError("Account is required."); return; }
+    if (editForm.type === "transfer" && !editForm.transfer_account_id) { setEditError("To account is required for transfers."); return; }
+    if (editForm.type === "transfer" && editForm.transfer_account_id === editForm.account_id) { setEditError("From and To accounts must be different."); return; }
+    try {
+      await updateTx.mutateAsync({
+        date: editForm.date,
+        description: editForm.description,
+        amount: parseFloat(editForm.amount),
+        type: editForm.type,
+        account_id: editForm.account_id,
+        is_cleared: editForm.cleared,
+        notes: editForm.notes || null,
+        category_id: editForm.category_id !== "none" && editForm.category_id ? editForm.category_id : null,
+        transfer_account_id: editForm.type === "transfer" && editForm.transfer_account_id ? editForm.transfer_account_id : null,
+      });
+      setEditOpen(false);
+    } catch {
+      setEditError("Failed to save changes. Please try again.");
     }
   }
 
@@ -515,9 +555,137 @@ function TransactionRow({ tx, accounts, onDelete }: { tx: Transaction; accounts:
         />
       </td>
       <td className="px-4 py-3 text-right">
-        <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center justify-end gap-1">
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Transaction</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditSubmit}>
+                <div className="space-y-4 py-2">
+                  {editError && (
+                    <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                      {editError}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={editForm.date}
+                        onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Type</Label>
+                      <Select value={editForm.type} onValueChange={(v) => setEditForm({ ...editForm, type: v, transfer_account_id: v !== "transfer" ? "" : editForm.transfer_account_id })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="expense">Expense</SelectItem>
+                          <SelectItem value="income">Income</SelectItem>
+                          <SelectItem value="transfer">Transfer</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Description</Label>
+                    <Input
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Amount ($)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>{editForm.type === "transfer" ? "From Account" : "Account"}</Label>
+                      <Select value={editForm.account_id} onValueChange={(v) => setEditForm({ ...editForm, account_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                        <SelectContent>
+                          {accounts.map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {editForm.type === "transfer" && (
+                    <div className="space-y-1">
+                      <Label>To Account</Label>
+                      <Select value={editForm.transfer_account_id} onValueChange={(v) => setEditForm({ ...editForm, transfer_account_id: v })}>
+                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                        <SelectContent>
+                          {accounts.filter((a) => a.id !== editForm.account_id).map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <Label>Category</Label>
+                    <Select value={editForm.category_id} onValueChange={(v) => setEditForm({ ...editForm, category_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Uncategorized</SelectItem>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Notes</Label>
+                    <Input
+                      placeholder="Optional notes"
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={`cleared-edit-${tx.id}`}
+                      type="checkbox"
+                      checked={editForm.cleared}
+                      onChange={(e) => setEditForm({ ...editForm, cleared: e.target.checked })}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    <Label htmlFor={`cleared-edit-${tx.id}`}>Cleared / Reconciled</Label>
+                  </div>
+                </div>
+                <DialogFooter className="mt-4">
+                  <DialogClose asChild>
+                    <Button type="button" variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit" disabled={updateTx.isPending}>
+                    {updateTx.isPending ? "Saving…" : "Save Changes"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 text-muted-foreground hover:text-destructive">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </td>
     </tr>
   );

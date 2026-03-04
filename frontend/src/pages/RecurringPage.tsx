@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, CheckCircle, ToggleLeft, ToggleRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,8 @@ interface RecurringItem {
   id: string;
   name: string;
   amount: number;
+  amount_min?: number | null;
+  amount_max?: number | null;
   type: "subscription" | "bill" | "income";
   frequency: string;
   next_due_date: string;
@@ -44,6 +47,12 @@ interface RecurringItem {
   account_id?: string;
   category_id?: string;
   notes?: string;
+  auto_match?: boolean;
+  keyword_match?: string | null;
+  last_paid_date?: string | null;
+  last_paid_amount?: number | null;
+  last_paid_transaction_id?: string | null;
+  is_paid_current_period?: boolean;
 }
 
 interface Account { id: string; name: string; type: string; }
@@ -52,23 +61,33 @@ interface Category { id: string; name: string; type: string; }
 interface RecurringFormState {
   name: string;
   amount: string;
+  amount_min: string;
+  amount_max: string;
+  is_variable: boolean;
   type: string;
   frequency: string;
   start_date: string;
   account_id: string;
   category_id: string;
   notes: string;
+  auto_match: boolean;
+  keyword_match: string;
 }
 
 const emptyForm = (): RecurringFormState => ({
   name: "",
   amount: "",
+  amount_min: "",
+  amount_max: "",
+  is_variable: false,
   type: "bill",
   frequency: "monthly",
   start_date: new Date().toISOString().slice(0, 10),
   account_id: "none",
   category_id: "none",
   notes: "",
+  auto_match: false,
+  keyword_match: "",
 });
 
 function Spinner() {
@@ -129,37 +148,59 @@ function RecurringTab({
 
   function openEdit(item: RecurringItem) {
     setEditItem(item);
+    const isVariable = item.amount_min != null && item.amount_max != null;
     setForm({
       name: item.name,
       amount: String(item.amount),
+      amount_min: item.amount_min != null ? String(item.amount_min) : "",
+      amount_max: item.amount_max != null ? String(item.amount_max) : "",
+      is_variable: isVariable,
       type: item.type,
       frequency: item.frequency,
       start_date: item.next_due_date,
       account_id: item.account_id || "none",
       category_id: item.category_id || "none",
       notes: item.notes ?? "",
+      auto_match: item.auto_match ?? false,
+      keyword_match: item.keyword_match ?? "",
     });
     setFormError(null);
     setFormOpen(true);
   }
 
-  const updateRecurring = editItem ? useUpdateRecurring(editItem.id) : null; // eslint-disable-line react-hooks/rules-of-hooks
+  const updateRecurring = useUpdateRecurring(editItem?.id ?? ""); // always called to satisfy rules of hooks
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
     if (!form.name.trim()) { setFormError("Name is required."); return; }
-    if (!form.amount || isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) {
-      setFormError("Valid amount is required."); return;
+    if (form.is_variable) {
+      const min = parseFloat(form.amount_min);
+      const max = parseFloat(form.amount_max);
+      if (!form.amount_min || isNaN(min) || min <= 0) { setFormError("Valid minimum amount is required."); return; }
+      if (!form.amount_max || isNaN(max) || max <= 0) { setFormError("Valid maximum amount is required."); return; }
+      if (max <= min) { setFormError("Maximum must be greater than minimum."); return; }
+    } else {
+      if (!form.amount || isNaN(parseFloat(form.amount)) || parseFloat(form.amount) <= 0) {
+        setFormError("Valid amount is required."); return;
+      }
     }
+    if (form.account_id === "none") { setFormError("Please select an account."); return; }
     try {
+      const min = form.is_variable ? parseFloat(form.amount_min) : null;
+      const max = form.is_variable ? parseFloat(form.amount_max) : null;
       const payload = {
         ...form,
-        amount: parseFloat(form.amount),
-        account_id: form.account_id === "none" ? "" : form.account_id,
-        category_id: form.category_id === "none" ? "" : form.category_id,
+        amount: form.is_variable ? (min! + max!) / 2 : parseFloat(form.amount),
+        amount_min: min,
+        amount_max: max,
+        next_due_date: form.start_date,
+        account_id: form.account_id,
+        category_id: form.category_id === "none" ? null : form.category_id,
+        auto_match: form.auto_match,
+        keyword_match: form.keyword_match.trim() || null,
       };
-      if (editItem && updateRecurring) {
+      if (editItem) {
         await updateRecurring.mutateAsync(payload);
       } else {
         await createRecurring.mutateAsync(payload);
@@ -204,7 +245,7 @@ function RecurringTab({
         </div>
         <Button size="sm" onClick={openAdd} className="flex items-center gap-1">
           <Plus className="h-4 w-4" />
-          Add {label.slice(0, -1)}
+          Add {label.endsWith("s") ? label.slice(0, -1) : label}
         </Button>
       </div>
 
@@ -259,9 +300,42 @@ function RecurringTab({
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <Label>Amount ($)</Label>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, is_variable: !form.is_variable, amount: "", amount_min: "", amount_max: "" })}
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                      form.is_variable
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                    )}
+                  >
+                    Variable range
+                  </button>
+                </div>
+                {form.is_variable ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Min"
+                      value={form.amount_min}
+                      onChange={(e) => setForm({ ...form, amount_min: e.target.value })}
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Max"
+                      value={form.amount_max}
+                      onChange={(e) => setForm({ ...form, amount_max: e.target.value })}
+                    />
+                  </div>
+                ) : (
                   <Input
                     type="number"
                     step="0.01"
@@ -269,22 +343,21 @@ function RecurringTab({
                     placeholder="0.00"
                     value={form.amount}
                     onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                    required
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label>Frequency</Label>
-                  <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="biweekly">Bi-weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="quarterly">Quarterly</SelectItem>
-                      <SelectItem value="annually">Annually</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label>Frequency</Label>
+                <Select value={form.frequency} onValueChange={(v) => setForm({ ...form, frequency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="biweekly">Bi-weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="quarterly">Quarterly</SelectItem>
+                    <SelectItem value="annually">Annually</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
                 <Label>Next Due / Start Date</Label>
@@ -321,6 +394,38 @@ function RecurringTab({
                   </Select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Auto-match transactions</Label>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, auto_match: !form.auto_match })}
+                    className={cn(
+                      "text-xs px-2 py-0.5 rounded-full border transition-colors",
+                      form.auto_match
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-muted-foreground/30 text-muted-foreground hover:border-primary/50"
+                    )}
+                  >
+                    {form.auto_match ? "Enabled" : "Disabled"}
+                  </button>
+                </div>
+                {form.auto_match && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">
+                      Keywords (comma-separated, matched against transaction description)
+                    </Label>
+                    <Input
+                      placeholder="e.g. Netflix, NETFLIX"
+                      value={form.keyword_match}
+                      onChange={(e) => setForm({ ...form, keyword_match: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      New transactions whose description contains a keyword and amount falls within the configured range will be auto-linked and marked paid.
+                    </p>
+                  </div>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label>Notes</Label>
                 <Input
@@ -334,8 +439,8 @@ function RecurringTab({
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={createRecurring.isPending || (updateRecurring?.isPending ?? false)}>
-                {createRecurring.isPending || updateRecurring?.isPending ? "Saving…" : "Save"}
+              <Button type="submit" disabled={createRecurring.isPending || updateRecurring.isPending}>
+                {createRecurring.isPending || updateRecurring.isPending ? "Saving…" : "Save"}
               </Button>
             </DialogFooter>
           </form>
@@ -408,6 +513,8 @@ function RecurringCard({
   onMarkPaid: () => void;
 }) {
   const updateRecurring = useUpdateRecurring(item.id);
+  const navigate = useNavigate();
+  const isPaid = item.is_paid_current_period === true;
 
   async function handleToggle() {
     await updateRecurring.mutateAsync({ is_active: !item.is_active });
@@ -418,26 +525,60 @@ function RecurringCard({
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-semibold leading-snug">{item.name}</CardTitle>
-          <Badge variant="outline" className={cn("text-xs shrink-0", dueBadgeClass(item.days_until_due))}>
-            {dueLabel(item.days_until_due)}
-          </Badge>
+          {isPaid ? (
+            <Badge variant="outline" className="border-emerald-500 bg-emerald-50 text-emerald-700 text-xs shrink-0">
+              Paid
+            </Badge>
+          ) : (
+            <Badge variant="outline" className={cn("text-xs shrink-0", dueBadgeClass(item.days_until_due))}>
+              {dueLabel(item.days_until_due)}
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-2xl font-bold">{formatCurrency(item.amount)}</span>
+          {item.amount_min != null && item.amount_max != null ? (
+            <div>
+              <span className="text-2xl font-bold">
+                {formatCurrency(item.amount_min)}–{formatCurrency(item.amount_max)}
+              </span>
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                ~{formatCurrency(item.amount)} avg
+              </span>
+            </div>
+          ) : (
+            <span className="text-2xl font-bold">{formatCurrency(item.amount)}</span>
+          )}
           <span className="text-xs text-muted-foreground capitalize">{item.frequency}</span>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Next due: {formatDate(item.next_due_date)}
-        </div>
+        {isPaid ? (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-emerald-600 font-medium">
+              {formatCurrency(item.last_paid_amount ?? item.amount)} paid
+              {item.last_paid_date ? ` · ${formatDate(item.last_paid_date)}` : ""}
+            </span>
+            {item.last_paid_transaction_id && (
+              <button
+                className="text-primary hover:underline underline-offset-2"
+                onClick={() => navigate("/transactions")}
+              >
+                View →
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            Next due: {formatDate(item.next_due_date)}
+          </div>
+        )}
         <div className="flex items-center gap-2 pt-1">
           <Button
             size="sm"
             variant="outline"
             className="flex-1 text-xs h-8 flex items-center gap-1"
             onClick={onMarkPaid}
-            disabled={!item.is_active}
+            disabled={!item.is_active || isPaid}
           >
             <CheckCircle className="h-3.5 w-3.5" />
             Mark Paid

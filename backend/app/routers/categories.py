@@ -71,8 +71,6 @@ async def delete_category(
     current_user: User = Depends(get_current_user),
 ):
     category = await _get_or_404(category_id, db)
-    if category.is_system:
-        raise HTTPException(status_code=403, detail="System categories cannot be deleted")
     category.deleted_at = datetime.now(timezone.utc)
     await db.commit()
 

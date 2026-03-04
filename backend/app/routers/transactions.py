@@ -16,6 +16,7 @@ from app.models.account import Account
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.transaction import BulkDeleteRequest, TransactionCreate, TransactionOut, TransactionUpdate
+from app.services.recurring_service import find_and_attach_recurring, detach_recurring
 from app.utils.pagination import PagedResponse
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -95,6 +96,10 @@ async def create_transaction(
                 )
                 db.add(dest_txn)
 
+    # Auto-match to a recurring item if one is configured for this transaction
+    if not data.model_dump().get("recurring_item_id"):
+        await find_and_attach_recurring(txn, db)
+
     await db.commit()
     return await _get_or_404(txn.id, db)
 
@@ -170,8 +175,9 @@ async def delete_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    now = datetime.now(timezone.utc)
     txn = await _get_or_404(transaction_id, db)
-    txn.deleted_at = datetime.now(timezone.utc)
+    await _reverse_balance_and_delete(txn, db, now)
     await db.commit()
 
 
@@ -186,8 +192,45 @@ async def bulk_delete(
         select(Transaction).where(Transaction.id.in_(data.ids), Transaction.deleted_at == None)
     )
     for txn in result.scalars().all():
-        txn.deleted_at = now
+        if txn.deleted_at is not None:
+            # Already soft-deleted as the counterpart of a transfer processed earlier
+            continue
+        await _reverse_balance_and_delete(txn, db, now)
     await db.commit()
+
+
+async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: datetime) -> None:
+    """Reverse the account balance effect of a transaction and soft-delete it."""
+    await detach_recurring(txn, db)
+    txn.deleted_at = now
+
+    account = await db.get(Account, txn.account_id)
+    if not account:
+        return
+
+    if txn.type == TransactionType.expense:
+        account.current_balance += txn.amount
+    elif txn.type == TransactionType.income:
+        account.current_balance -= txn.amount
+    elif txn.type == TransactionType.transfer and txn.transfer_account_id:
+        # Source side: was subtracted from this account
+        account.current_balance += txn.amount
+        # Find and soft-delete the matching destination leg
+        dest_result = await db.execute(
+            select(Transaction).where(
+                Transaction.account_id == txn.transfer_account_id,
+                Transaction.transfer_account_id == txn.account_id,
+                Transaction.amount == txn.amount,
+                Transaction.date == txn.date,
+                Transaction.deleted_at == None,
+            )
+        )
+        dest_txn = dest_result.scalar_one_or_none()
+        if dest_txn:
+            dest_txn.deleted_at = now
+            dest_account = await db.get(Account, dest_txn.account_id)
+            if dest_account:
+                dest_account.current_balance -= dest_txn.amount
 
 
 async def _get_or_404(transaction_id: uuid.UUID, db: AsyncSession) -> Transaction:

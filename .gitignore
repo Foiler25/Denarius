@@ -12,3 +12,6 @@ build/
 *.egg-info/
 .DS_Store
 *.log
+startup-shutdown
+.grepai/
+codebase-breakdown.md

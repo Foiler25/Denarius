@@ -36,6 +36,8 @@ class RecurringItem(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+    amount_min: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    amount_max: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     type: Mapped[RecurringType] = mapped_column(
         Enum(RecurringType, name="recurring_type"), nullable=False
     )
@@ -45,9 +47,14 @@ class RecurringItem(Base, UUIDMixin, TimestampMixin):
     day_of_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     next_due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     auto_post: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    auto_match: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    keyword_match: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_paid_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
+    last_paid_transaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     account: Mapped["Account"] = relationship("Account")
     category: Mapped["Category"] = relationship("Category")

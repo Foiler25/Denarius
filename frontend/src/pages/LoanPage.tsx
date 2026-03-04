@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,16 +23,15 @@ interface Account {
   current_balance: number;
 }
 
-// Matches MortgageOut from the backend
-interface MortgageData {
+interface LoanData {
   original_principal: number;
   interest_rate: number;
   term_months: number;
   start_date: string;
   extra_payment: number;
+  loan_type?: string;
 }
 
-// Matches AmortizationRow from the backend
 interface AmortizationRow {
   payment_number: number;
   payment_date: string;
@@ -46,6 +46,15 @@ interface ExtraPaymentResult {
   interest_saved: number;
   new_payoff_date: string;
 }
+
+const LOAN_TYPE_LABELS: Record<string, string> = {
+  auto: "Auto Loan",
+  student: "Student Loan",
+  personal: "Personal Loan",
+  business: "Business Loan",
+  home_equity: "Home Equity Loan",
+  other: "Other Loan",
+};
 
 function Spinner() {
   return (
@@ -67,16 +76,13 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default function MortgagePage() {
+export default function LoanPage() {
   const { data: accounts = [] } = useAccounts();
-  const mortgageAccounts = (accounts as Account[]).filter(
-    (a) => a.type === "mortgage"
-  );
+  const loanAccounts = (accounts as Account[]).filter((a) => a.type === "loan");
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const accountId = selectedAccountId || (mortgageAccounts[0]?.id ?? "");
+  const accountId = selectedAccountId || (loanAccounts[0]?.id ?? "");
 
-  // Extra payment calc
   const [extraInput, setExtraInput] = useState("");
   const [calcResult, setCalcResult] = useState<ExtraPaymentResult | null>(null);
   const [calcError, setCalcError] = useState<string | null>(null);
@@ -85,11 +91,10 @@ export default function MortgagePage() {
   type ViewMode = "first12" | "next12" | "all";
   const [viewMode, setViewMode] = useState<ViewMode>("first12");
 
-  const { data: mortgage, isLoading: mortLoading, isError: mortError } = useMortgage(accountId);
-  // Pass extra_payment=0 so the schedule shows the standard baseline amortization
+  const { data: loanDetail, isLoading: loanLoading, isError: loanError } = useMortgage(accountId);
   const { data: amortizationData, isLoading: amorLoading } = useAmortization(accountId, 0);
 
-  const mortgageInfo: MortgageData | null = mortgage ?? null;
+  const loanInfo: LoanData | null = loanDetail ?? null;
   const allRows: AmortizationRow[] = Array.isArray(amortizationData) ? amortizationData : [];
   const selectedAccount = (accounts as Account[]).find((a) => a.id === accountId);
   const standardMonthlyPayment = allRows[0]?.payment_amount;
@@ -114,23 +119,25 @@ export default function MortgagePage() {
       const result = await extraCalc.mutateAsync(val);
       setCalcResult(result);
     } catch {
-      setCalcError("Failed to calculate. Ensure mortgage details are configured.");
+      setCalcError("Failed to calculate. Ensure loan details are configured.");
     }
   }
+
+  const loanTypeLabel = loanInfo?.loan_type ? LOAN_TYPE_LABELS[loanInfo.loan_type] ?? loanInfo.loan_type : null;
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Mortgage</h1>
-        <p className="text-muted-foreground text-sm">Amortization details and extra payment analysis.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Loans</h1>
+        <p className="text-muted-foreground text-sm">Amortization details and extra payment analysis for your loans.</p>
       </div>
 
       {/* Account Selector */}
       <div className="flex items-center gap-3">
-        <Label className="shrink-0">Mortgage Account</Label>
-        {mortgageAccounts.length === 0 ? (
+        <Label className="shrink-0">Loan Account</Label>
+        {loanAccounts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No mortgage accounts found. Add one in Settings.
+            No loan accounts found. Add one in Settings.
           </p>
         ) : (
           <Select value={accountId} onValueChange={setSelectedAccountId}>
@@ -138,7 +145,7 @@ export default function MortgagePage() {
               <SelectValue placeholder="Select account…" />
             </SelectTrigger>
             <SelectContent>
-              {mortgageAccounts.map((a) => (
+              {loanAccounts.map((a) => (
                 <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
               ))}
             </SelectContent>
@@ -150,29 +157,36 @@ export default function MortgagePage() {
         <div className="text-center py-20 text-muted-foreground text-sm">
           Select a loan account to view details.
         </div>
-      ) : mortLoading ? (
+      ) : loanLoading ? (
         <Spinner />
-      ) : mortError || !mortgageInfo ? (
+      ) : loanError || !loanInfo ? (
         <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3">
-          No mortgage details found for this account. Please configure them in Settings.
+          No loan details found for this account. Please configure them in Settings.
         </div>
       ) : (
         <>
+          {/* Loan type badge */}
+          {loanTypeLabel && (
+            <div>
+              <Badge variant="secondary" className="text-xs">{loanTypeLabel}</Badge>
+            </div>
+          )}
+
           {/* Key Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <StatCard
               label="Original Principal"
-              value={formatCurrency(mortgageInfo.original_principal)}
-              sub={`Started ${formatDate(mortgageInfo.start_date)}`}
+              value={formatCurrency(loanInfo.original_principal)}
+              sub={`Started ${formatDate(loanInfo.start_date)}`}
             />
             <StatCard
               label="Current Balance"
               value={selectedAccount ? formatCurrency(selectedAccount.current_balance) : "—"}
-              sub={`${mortgageInfo.term_months} month term`}
+              sub={`${loanInfo.term_months} month term`}
             />
             <StatCard
               label="Interest Rate"
-              value={`${mortgageInfo.interest_rate}%`}
+              value={`${loanInfo.interest_rate}%`}
               sub="Annual rate"
             />
             <StatCard

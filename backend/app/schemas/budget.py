@@ -22,19 +22,19 @@ class BudgetOut(BaseModel):
     id: uuid.UUID
     category_id: uuid.UUID
     month: date
-    amount: Decimal
+    amount: float
     category: Optional[CategoryOut] = None
 
 
 class BudgetWithSpent(BudgetOut):
-    actual_spent: Decimal
-    remaining: Decimal
+    actual_spent: float
+    remaining: float
     is_over_budget: bool
 
 
 class BudgetSummary(BaseModel):
-    total_budgeted: Decimal
-    total_spent: Decimal
+    total_budgeted: float
+    total_spent: float
     over_budget_categories: list[BudgetWithSpent]
 
 
