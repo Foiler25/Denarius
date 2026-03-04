@@ -14,6 +14,7 @@ class AccountType(str, enum.Enum):
     mortgage = "mortgage"
     loan = "loan"
     investment = "investment"
+    property = "property"
 
 
 class Account(Base, UUIDMixin, TimestampMixin):

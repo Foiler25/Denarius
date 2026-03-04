@@ -127,6 +127,7 @@ const ACCOUNT_TYPES = [
   "investment",
   "mortgage",
   "loan",
+  "property",
   "cash",
   "other",
 ];

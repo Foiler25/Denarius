@@ -8,7 +8,12 @@ from app.models.account import Account, AccountType
 from app.models.net_worth_snapshot import NetWorthSnapshot
 from app.schemas.net_worth import AccountBreakdownItem, NetWorthCurrent
 
-ASSET_TYPES = {AccountType.checking, AccountType.savings, AccountType.investment}
+ASSET_TYPES = {
+    AccountType.checking,
+    AccountType.savings,
+    AccountType.investment,
+    AccountType.property,
+}
 LIABILITY_TYPES = {AccountType.credit_card, AccountType.mortgage, AccountType.loan}
 
 
@@ -23,14 +28,16 @@ async def get_current_net_worth(db: AsyncSession) -> NetWorthCurrent:
     breakdown = []
 
     for acc in accounts:
+        is_asset = acc.type in ASSET_TYPES
         item = AccountBreakdownItem(
             account_id=str(acc.id),
-            name=acc.name,
-            type=acc.type.value,
+            account_name=acc.name,
+            account_type=acc.type.value,
             balance=acc.current_balance,
+            is_asset=is_asset,
         )
         breakdown.append(item)
-        if acc.type in ASSET_TYPES:
+        if is_asset:
             assets += acc.current_balance
         elif acc.type in LIABILITY_TYPES:
             liabilities += acc.current_balance

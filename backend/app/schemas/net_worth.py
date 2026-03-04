@@ -7,9 +7,10 @@ from pydantic import BaseModel
 
 class AccountBreakdownItem(BaseModel):
     account_id: str
-    name: str
-    type: str
+    account_name: str
+    account_type: str
     balance: Decimal
+    is_asset: bool
 
 
 class NetWorthCurrent(BaseModel):
