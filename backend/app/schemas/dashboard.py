@@ -10,6 +10,7 @@ class MonthlySpendingSummary(BaseModel):
     current_month: Decimal
     prev_month: Decimal
     budget_total: Decimal
+    current_month_income: Decimal
 
 
 class DashboardSummary(BaseModel):

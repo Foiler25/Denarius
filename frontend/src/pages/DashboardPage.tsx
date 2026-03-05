@@ -62,7 +62,7 @@ function formatChartDate(dateStr: string, granularity: "daily" | "monthly"): str
 
 
 function AccountBalancesChart() {
-  const [days, setDays] = useState(365);
+  const [days, setDays] = useState(30);
   const { data, isLoading } = useAccountBalanceHistory(days);
   const hiddenAccountIds = useDashboardStore((s) => s.hiddenAccountIds);
 
@@ -290,6 +290,7 @@ export default function DashboardPage() {
     };
     monthly_spending: {
       current_month: number;
+      current_month_income: number;
       prev_month: number;
       budget_total: number;
     };
@@ -302,7 +303,7 @@ export default function DashboardPage() {
       type: string;
     }>;
     recent_transactions: Array<{
-      id: string;
+      id:string;
       date: string;
       description: string;
       category_name?: string;
@@ -325,6 +326,8 @@ export default function DashboardPage() {
   const overBudget =
     dashboard.monthly_spending.current_month > dashboard.monthly_spending.budget_total &&
     dashboard.monthly_spending.budget_total > 0;
+
+  const cashFlow = dashboard.monthly_spending.current_month_income - dashboard.monthly_spending.current_month;
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -469,21 +472,21 @@ export default function DashboardPage() {
         {/* Net Worth */}
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Cash Flow</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div
               className={cn(
                 "text-2xl font-bold",
-                dashboard.net_worth.net_worth >= 0 ? "text-emerald-600" : "text-destructive"
+                cashFlow >= 0 ? "text-emerald-600" : "text-destructive"
               )}
             >
-              {formatCurrency(dashboard.net_worth.net_worth)}
+              {formatCurrency(cashFlow)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatCurrency(dashboard.net_worth.total_assets)} assets &minus;{" "}
-              {formatCurrency(dashboard.net_worth.total_liabilities)} liabilities
+              {formatCurrency(dashboard.monthly_spending.current_month_income)} income &minus;{" "}
+              {formatCurrency(dashboard.monthly_spending.current_month)} expenses
             </p>
           </CardContent>
         </Card>

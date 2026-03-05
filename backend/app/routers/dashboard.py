@@ -40,7 +40,7 @@ async def dashboard_summary(
     net_worth = await get_current_net_worth(db)
 
     # Monthly spending
-    curr_result = await db.execute(
+    curr_spending_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
         .where(
             Transaction.type == TransactionType.expense,
@@ -49,7 +49,18 @@ async def dashboard_summary(
             Transaction.deleted_at == None,
         )
     )
-    current_spending = curr_result.scalar() or Decimal("0")
+    current_spending = curr_spending_result.scalar() or Decimal("0")
+
+    curr_income_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .where(
+            Transaction.type == TransactionType.income,
+            Transaction.date >= current_month_start,
+            Transaction.date < next_month_start,
+            Transaction.deleted_at == None,
+        )
+    )
+    current_income = curr_income_result.scalar() or Decimal("0")
 
     if current_month_start.month == 12:
         prev_month_end = current_month_start
@@ -101,6 +112,7 @@ async def dashboard_summary(
         net_worth=net_worth,
         monthly_spending=MonthlySpendingSummary(
             current_month=current_spending,
+            current_month_income=current_income,
             prev_month=prev_spending,
             budget_total=budget_total,
         ),
