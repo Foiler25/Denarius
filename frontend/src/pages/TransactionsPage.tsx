@@ -12,6 +12,8 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import {
   Dialog,
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { useTransactions, useCreateTransaction, useDeleteTransaction, useUpdateTransaction } from "@/api/transactions";
 import { useAccounts } from "@/api/accounts";
+import { useExpenseAccounts, type ExpenseAccountOut } from "@/api/expenseAccounts";
 import { useCategories } from "@/api/categories";
 import { formatCurrency, formatDate, todayString, cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -38,6 +41,9 @@ interface Transaction {
   category?: { id: string; name: string; type: string } | null;
   account_id: string;
   transfer_account_id?: string | null;
+  expense_account_id?: string | null;
+  expense_account_name?: string | null;
+  expense_account_color?: string | null;
   recurring_item?: { type: string } | null;
   type: "income" | "expense" | "transfer";
   amount: number;
@@ -71,6 +77,7 @@ interface TxFormState {
   type: string;
   account_id: string;
   transfer_account_id: string;
+  expense_account_id: string;
   category_id: string;
   cleared: boolean;
   notes: string;
@@ -83,6 +90,7 @@ const emptyForm = (tz: string): TxFormState => ({
   type: "expense",
   account_id: "",
   transfer_account_id: "",
+  expense_account_id: "",
   category_id: "none",
   cleared: false,
   notes: "",
@@ -109,6 +117,7 @@ export default function TransactionsPage() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get("category_id") ?? "all");
+  const [expenseAccountFilter, setExpenseAccountFilter] = useState("all");
   const [startDate, setStartDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).start);
   const [endDate, setEndDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).end);
   const [page, setPage] = useState(1);
@@ -129,12 +138,14 @@ export default function TransactionsPage() {
     ...(accountFilter !== "all" ? { account_id: accountFilter } : {}),
     ...(typeFilter !== "all" ? { type: typeFilter } : {}),
     ...(categoryFilter !== "all" ? { category_id: categoryFilter } : {}),
+    ...(expenseAccountFilter !== "all" ? { expense_account_id: expenseAccountFilter } : {}),
     ...(startDate ? { start_date: startDate } : {}),
     ...(endDate ? { end_date: endDate } : {}),
   };
 
   const { data: txData, isLoading, isError } = useTransactions(queryParams);
   const { data: accounts = [] } = useAccounts();
+  const { data: expenseAccounts = [] } = useExpenseAccounts();
   const { data: categories = [] } = useCategories();
 
   const createTx = useCreateTransaction();
@@ -158,6 +169,7 @@ export default function TransactionsPage() {
       notes: form.notes || null,
       category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
       transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
+      expense_account_id: (form.type === "expense" || form.type === "income") && form.expense_account_id ? form.expense_account_id : null,
       ...(override ? { once_per_month_override: override } : {}),
     };
   }
@@ -278,7 +290,7 @@ export default function TransactionsPage() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>{form.type === "transfer" ? "From Account" : "Account"}</Label>
+                    <Label>{form.type === "transfer" ? "From Asset Account" : "Asset Account"}</Label>
                     <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
                       <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                       <SelectContent>
@@ -291,13 +303,40 @@ export default function TransactionsPage() {
                 </div>
                 {form.type === "transfer" && (
                   <div className="space-y-1">
-                    <Label>To Account</Label>
+                    <Label>To Asset Account</Label>
                     <Select value={form.transfer_account_id} onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}>
                       <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                       <SelectContent>
                         {(accounts as Account[]).filter((a) => a.id !== form.account_id).map((a) => (
                           <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                         ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {(form.type === "expense" || form.type === "income") && (
+                  <div className="space-y-1">
+                    <Label>Expense Account</Label>
+                    <Select value={form.expense_account_id || "none"} onValueChange={(v) => setForm({ ...form, expense_account_id: v === "none" ? "" : v })}>
+                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {(accounts as Account[]).length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Asset Accounts</SelectLabel>
+                            {(accounts as Account[]).map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {(expenseAccounts as ExpenseAccountOut[]).length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Expense Accounts</SelectLabel>
+                            {(expenseAccounts as ExpenseAccountOut[]).map((ea) => (
+                              <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -348,26 +387,14 @@ export default function TransactionsPage() {
 
       {/* Filter Bar */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 space-y-3">
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[160px] space-y-1">
-              <Label className="text-xs">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Description…"
-                  className="pl-8"
-                  value={search}
-                  onChange={(e) => { setSearch(e.target.value); handleFilterChange(); }}
-                />
-              </div>
-            </div>
             <div className="min-w-[140px] space-y-1">
-              <Label className="text-xs">Account</Label>
+              <Label className="text-xs">Asset Account</Label>
               <Select value={accountFilter} onValueChange={(v) => { setAccountFilter(v); handleFilterChange(); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Accounts</SelectItem>
+                  <SelectItem value="all">All Asset Accounts</SelectItem>
                   {(accounts as Account[]).map((a) => (
                     <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                   ))}
@@ -398,6 +425,18 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="min-w-[160px] space-y-1">
+              <Label className="text-xs">Expense Account</Label>
+              <Select value={expenseAccountFilter} onValueChange={(v) => { setExpenseAccountFilter(v); handleFilterChange(); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Expense Accounts</SelectItem>
+                  {[...(expenseAccounts as ExpenseAccountOut[])].filter(a => a.is_active).sort((a, b) => a.name.localeCompare(b.name)).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1">
               <Label className="text-xs">From</Label>
               <Input
@@ -416,13 +455,27 @@ export default function TransactionsPage() {
                 onChange={(e) => { setEndDate(e.target.value); handleFilterChange(); }}
               />
             </div>
+          </div>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1 min-w-[160px] space-y-1">
+              <Label className="text-xs">Search</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Description…"
+                  className="pl-8"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); handleFilterChange(); }}
+                />
+              </div>
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
                 const { start, end } = currentMonthDates(timezone);
                 setSearch(""); setAccountFilter("all"); setTypeFilter("all");
-                setCategoryFilter("all"); setStartDate(start); setEndDate(end); setPage(1);
+                setCategoryFilter("all"); setExpenseAccountFilter("all"); setStartDate(start); setEndDate(end); setPage(1);
               }}
             >
               Reset
@@ -453,7 +506,7 @@ export default function TransactionsPage() {
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Description</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Category</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Account</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Asset Account</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Amount</th>
                     <th className="text-center px-4 py-3 font-medium text-muted-foreground">Cleared</th>
@@ -466,6 +519,7 @@ export default function TransactionsPage() {
                       key={tx.id}
                       tx={tx}
                       accounts={accounts as Account[]}
+                      expenseAccounts={expenseAccounts as ExpenseAccountOut[]}
                       categories={categories as Category[]}
                       onDelete={() => { setDeleteId(tx.id); setDeleteOpen(true); }}
                     />
@@ -552,7 +606,7 @@ export default function TransactionsPage() {
   );
 }
 
-function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transaction; accounts: Account[]; categories: Category[]; onDelete: () => void }) {
+function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }: { tx: Transaction; accounts: Account[]; expenseAccounts: ExpenseAccountOut[]; categories: Category[]; onDelete: () => void }) {
   const updateTx = useUpdateTransaction(tx.id);
   const [cleared, setCleared] = useState(tx.is_cleared);
   const [editOpen, setEditOpen] = useState(false);
@@ -563,6 +617,7 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
     type: tx.type,
     account_id: tx.account_id,
     transfer_account_id: tx.transfer_account_id ?? "",
+    expense_account_id: tx.expense_account_id ?? "",
     category_id: tx.category_id ?? "none",
     cleared: tx.is_cleared,
     notes: tx.notes ?? "",
@@ -593,6 +648,7 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
       notes: editForm.notes || null,
       category_id: editForm.category_id !== "none" && editForm.category_id ? editForm.category_id : null,
       transfer_account_id: editForm.type === "transfer" && editForm.transfer_account_id ? editForm.transfer_account_id : null,
+      expense_account_id: (editForm.type === "expense" || editForm.type === "income") && editForm.expense_account_id ? editForm.expense_account_id : null,
       ...(override ? { once_per_month_override: override } : {}),
     };
   }
@@ -619,8 +675,8 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
     setEditError(null);
     if (!editForm.description.trim()) { setEditError("Description is required."); return; }
     if (!editForm.amount || isNaN(parseFloat(editForm.amount))) { setEditError("Valid amount is required."); return; }
-    if (!editForm.account_id) { setEditError("Account is required."); return; }
-    if (editForm.type === "transfer" && !editForm.transfer_account_id) { setEditError("To account is required for transfers."); return; }
+    if (!editForm.account_id) { setEditError("Asset account is required."); return; }
+    if (editForm.type === "transfer" && !editForm.transfer_account_id) { setEditError("To asset account is required for transfers."); return; }
     if (editForm.type === "transfer" && editForm.transfer_account_id === editForm.account_id) { setEditError("From and To accounts must be different."); return; }
     await submitEditPayload(buildEditPayload());
   }
@@ -633,7 +689,17 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
   return (
     <tr className="border-b last:border-0 hover:bg-muted/30 transition-colors">
       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
-      <td className="px-4 py-3 font-medium max-w-[200px] truncate">{tx.description}</td>
+      <td className="px-4 py-3 max-w-[200px]">
+        <div className="font-medium truncate">{tx.description}</div>
+        {tx.expense_account_name && (
+          <div className="flex items-center gap-1 mt-0.5">
+            {tx.expense_account_color && (
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tx.expense_account_color }} />
+            )}
+            <span className="text-xs text-muted-foreground truncate">{tx.expense_account_name}</span>
+          </div>
+        )}
+      </td>
       <td className="px-4 py-3 text-muted-foreground">{tx.category?.name ?? "—"}</td>
       <td className="px-4 py-3 text-muted-foreground">{accountName}</td>
       <td className="px-4 py-3">
@@ -724,7 +790,7 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label>{editForm.type === "transfer" ? "From Account" : "Account"}</Label>
+                      <Label>{editForm.type === "transfer" ? "From Asset Account" : "Asset Account"}</Label>
                       <Select value={editForm.account_id} onValueChange={(v) => setEditForm({ ...editForm, account_id: v })}>
                         <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                         <SelectContent>
@@ -737,13 +803,40 @@ function TransactionRow({ tx, accounts, categories, onDelete }: { tx: Transactio
                   </div>
                   {editForm.type === "transfer" && (
                     <div className="space-y-1">
-                      <Label>To Account</Label>
+                      <Label>To Asset Account</Label>
                       <Select value={editForm.transfer_account_id} onValueChange={(v) => setEditForm({ ...editForm, transfer_account_id: v })}>
                         <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                         <SelectContent>
                           {accounts.filter((a) => a.id !== editForm.account_id).map((a) => (
                             <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {(editForm.type === "expense" || editForm.type === "income") && (
+                    <div className="space-y-1">
+                      <Label>Expense Account</Label>
+                      <Select value={editForm.expense_account_id || "none"} onValueChange={(v) => setEditForm({ ...editForm, expense_account_id: v === "none" ? "" : v })}>
+                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {accounts.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel>Asset Accounts</SelectLabel>
+                              {accounts.map((a) => (
+                                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          )}
+                          {expenseAccounts.length > 0 && (
+                            <SelectGroup>
+                              <SelectLabel>Expense Accounts</SelectLabel>
+                              {expenseAccounts.map((ea) => (
+                                <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
+                              ))}
+                            </SelectGroup>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>

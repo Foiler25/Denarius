@@ -24,7 +24,9 @@ async def register_user(request: RegisterRequest, db: AsyncSession) -> tuple[Use
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username or email already exists")
 
-    count_result = await db.execute(select(func.count()).select_from(User))
+    count_result = await db.execute(
+        select(func.count()).select_from(User).where(User.deleted_at == None)
+    )
     user_count = count_result.scalar()
     role = UserRole.admin if user_count == 0 else UserRole.member
 
@@ -79,6 +81,20 @@ async def refresh_tokens(raw_refresh_token: str, db: AsyncSession) -> tuple[User
     access_token, new_raw_refresh = await _issue_tokens(user, db)
     await db.commit()
     return user, access_token, new_raw_refresh
+
+
+async def claim_admin(user: User, db: AsyncSession) -> User:
+    admin_count_result = await db.execute(
+        select(func.count()).select_from(User).where(
+            User.role == UserRole.admin, User.deleted_at == None, User.is_active == True
+        )
+    )
+    if admin_count_result.scalar() > 0:
+        raise HTTPException(status_code=403, detail="An admin already exists")
+    user.role = UserRole.admin
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 async def logout_user(raw_refresh_token: str, db: AsyncSession) -> None:

@@ -4,6 +4,9 @@ import Header from "./Header";
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
+  "/accounts": "Asset Accounts",
+  "/expense-accounts": "Expense Accounts",
+  "/categories": "Categories",
   "/transactions": "Transactions",
   "/budgets": "Budgets",
   "/recurring": "Recurring & Subscriptions",

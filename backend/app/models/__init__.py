@@ -2,6 +2,7 @@
 from . import (  # noqa: F401
     user,
     account,
+    expense_account,
     mortgage_detail,
     category,
     transaction,

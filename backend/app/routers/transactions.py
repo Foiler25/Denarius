@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from app.dependencies import get_current_user, get_db
 from app.models.account import Account
 from app.models.category import Category
+from app.models.expense_account import ExpenseAccount
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.transaction import BulkDeleteRequest, TransactionCreate, TransactionOut, TransactionUpdate
@@ -74,10 +75,11 @@ async def list_transactions(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     is_cleared: Optional[bool] = None,
+    expense_account_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Transaction).options(selectinload(Transaction.category), selectinload(Transaction.recurring_item)).where(Transaction.deleted_at == None)
+    q = select(Transaction).options(selectinload(Transaction.category), selectinload(Transaction.recurring_item), selectinload(Transaction.account), selectinload(Transaction.expense_account)).where(Transaction.deleted_at == None)
     if account_id:
         q = q.where(Transaction.account_id == account_id)
     if category_id:
@@ -92,6 +94,8 @@ async def list_transactions(
         q = q.where(Transaction.date <= end_date)
     if is_cleared is not None:
         q = q.where(Transaction.is_cleared == is_cleared)
+    if expense_account_id:
+        q = q.where(Transaction.expense_account_id == expense_account_id)
 
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar()
@@ -338,7 +342,7 @@ async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: d
 async def _get_or_404(transaction_id: uuid.UUID, db: AsyncSession) -> Transaction:
     result = await db.execute(
         select(Transaction)
-        .options(selectinload(Transaction.category), selectinload(Transaction.recurring_item))
+        .options(selectinload(Transaction.category), selectinload(Transaction.recurring_item), selectinload(Transaction.account), selectinload(Transaction.expense_account))
         .where(Transaction.id == transaction_id, Transaction.deleted_at == None)
     )
     txn = result.scalar_one_or_none()

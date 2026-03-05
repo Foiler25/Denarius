@@ -11,6 +11,9 @@ import LoanPage from "@/pages/LoanPage";
 import NetWorthPage from "@/pages/NetWorthPage";
 import ReportsPage from "@/pages/ReportsPage";
 import SettingsPage from "@/pages/settings/SettingsPage";
+import AccountsPage from "@/pages/AccountsPage";
+import ExpenseAccountsPage from "@/pages/ExpenseAccountsPage";
+import CategoriesPage from "@/pages/CategoriesPage";
 
 export default function App() {
   return (
@@ -25,6 +28,9 @@ export default function App() {
           }
         >
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/accounts" element={<AccountsPage />} />
+          <Route path="/expense-accounts" element={<ExpenseAccountsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/recurring" element={<RecurringPage />} />

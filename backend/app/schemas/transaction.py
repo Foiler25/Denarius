@@ -16,6 +16,7 @@ class TransactionCreate(BaseModel):
     account_id: uuid.UUID
     category_id: Optional[uuid.UUID] = None
     transfer_account_id: Optional[uuid.UUID] = None
+    expense_account_id: Optional[uuid.UUID] = None
     amount: Decimal
     type: TransactionType
     description: Optional[str] = None
@@ -32,6 +33,7 @@ _Date = date
 
 class TransactionUpdate(BaseModel):
     category_id: Optional[uuid.UUID] = None
+    expense_account_id: Optional[uuid.UUID] = None
     amount: Optional[Decimal] = None
     description: Optional[str] = None
     notes: Optional[str] = None
@@ -48,6 +50,7 @@ class TransactionOut(BaseModel):
     category_id: Optional[uuid.UUID]
     transfer_account_id: Optional[uuid.UUID]
     recurring_item_id: Optional[uuid.UUID]
+    expense_account_id: Optional[uuid.UUID] = None
     amount: Decimal
     type: TransactionType
     description: Optional[str]
@@ -58,6 +61,8 @@ class TransactionOut(BaseModel):
     recurring_item: Optional[RecurringItemRef] = None
     account_name: Optional[str] = None
     account_color: Optional[str] = None
+    expense_account_name: Optional[str] = None
+    expense_account_color: Optional[str] = None
 
 
 class BulkDeleteRequest(BaseModel):

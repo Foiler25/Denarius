@@ -35,3 +35,11 @@ async def logout(request: RefreshRequest, db: AsyncSession = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/claim-admin", response_model=UserOut)
+async def claim_admin(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await auth_service.claim_admin(current_user, db)

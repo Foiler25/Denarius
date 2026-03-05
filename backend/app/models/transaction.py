@@ -29,6 +29,9 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     recurring_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("recurring_items.id", ondelete="SET NULL"), nullable=True
     )
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("expense_accounts.id", ondelete="SET NULL"), nullable=True
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -46,6 +49,7 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     category: Mapped["Category"] = relationship("Category")
     creator: Mapped["User"] = relationship("User")
     recurring_item: Mapped["RecurringItem | None"] = relationship("RecurringItem", foreign_keys=[recurring_item_id], lazy="noload")
+    expense_account: Mapped["ExpenseAccount | None"] = relationship("ExpenseAccount", foreign_keys=[expense_account_id], lazy="noload")
 
     @property
     def account_name(self) -> str | None:
@@ -54,3 +58,11 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     @property
     def account_color(self) -> str | None:
         return self.account.color if self.account else None
+
+    @property
+    def expense_account_name(self) -> str | None:
+        return self.expense_account.name if self.expense_account else None
+
+    @property
+    def expense_account_color(self) -> str | None:
+        return self.expense_account.color if self.expense_account else None

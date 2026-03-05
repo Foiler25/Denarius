@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.routers import (
-    auth, accounts, mortgage, transactions, categories,
+    auth, accounts, expense_accounts, mortgage, transactions, categories,
     budgets, recurring, networth, reports, dashboard, users, system,
 )
 from app.scheduler.setup import start_scheduler, stop_scheduler
@@ -59,6 +59,7 @@ app.add_middleware(
 PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=PREFIX)
 app.include_router(accounts.router, prefix=PREFIX)
+app.include_router(expense_accounts.router, prefix=PREFIX)
 app.include_router(mortgage.router, prefix=PREFIX)
 app.include_router(transactions.router, prefix=PREFIX)
 app.include_router(categories.router, prefix=PREFIX)
