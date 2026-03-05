@@ -7,6 +7,7 @@ from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
+from app.models.account import Account, AccountType
 from app.models.category import Category
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -22,6 +23,7 @@ async def spending_by_category(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _liability_types = [AccountType.mortgage, AccountType.loan]
     q = (
         select(
             Category.id,
@@ -30,9 +32,11 @@ async def spending_by_category(
             func.sum(Transaction.amount).label("total"),
         )
         .join(Transaction, Transaction.category_id == Category.id)
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.deleted_at == None,
+            Account.type.not_in(_liability_types),
         )
         .group_by(Category.id, Category.name, Category.color)
         .order_by(func.sum(Transaction.amount).desc())
@@ -65,6 +69,7 @@ async def income_vs_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _liability_types = [AccountType.mortgage, AccountType.loan]
     q = (
         select(
             extract("year", Transaction.date).label("year"),
@@ -72,9 +77,11 @@ async def income_vs_expense(
             Transaction.type,
             func.sum(Transaction.amount).label("total"),
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.deleted_at == None,
             Transaction.type.in_([TransactionType.income, TransactionType.expense]),
+            Account.type.not_in(_liability_types),
         )
         .group_by("year", "month", Transaction.type)
         .order_by("year", "month")
@@ -115,15 +122,18 @@ async def monthly_trend(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _liability_types = [AccountType.mortgage, AccountType.loan]
     q = (
         select(
             extract("year", Transaction.date).label("year"),
             extract("month", Transaction.date).label("month"),
             func.sum(Transaction.amount).label("total"),
         )
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.deleted_at == None,
             Transaction.type == TransactionType.expense,
+            Account.type.not_in(_liability_types),
         )
         .group_by("year", "month")
         .order_by("year", "month")

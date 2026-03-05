@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_current_user, get_db
+from app.models.account import Account, AccountType
 from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -40,24 +41,30 @@ async def dashboard_summary(
     net_worth = await get_current_net_worth(db)
 
     # Monthly spending
+    _liability_types = [AccountType.mortgage, AccountType.loan]
+
     curr_spending_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.date >= current_month_start,
             Transaction.date < next_month_start,
             Transaction.deleted_at == None,
+            Account.type.not_in(_liability_types),
         )
     )
     current_spending = curr_spending_result.scalar() or Decimal("0")
 
     curr_income_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.income,
             Transaction.date >= current_month_start,
             Transaction.date < next_month_start,
             Transaction.deleted_at == None,
+            Account.type.not_in(_liability_types),
         )
     )
     current_income = curr_income_result.scalar() or Decimal("0")
@@ -69,11 +76,13 @@ async def dashboard_summary(
 
     prev_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.date >= prev_month_start,
             Transaction.date < current_month_start,
             Transaction.deleted_at == None,
+            Account.type.not_in(_liability_types),
         )
     )
     prev_spending = prev_result.scalar() or Decimal("0")
