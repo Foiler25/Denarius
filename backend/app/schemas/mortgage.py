@@ -54,3 +54,16 @@ class ExtraPaymentCalcResult(BaseModel):
     months_saved: int
     interest_saved: Decimal
     new_payoff_date: date
+
+
+class MortgagePaymentCreate(BaseModel):
+    source_account_id: uuid.UUID
+    source_amount: Decimal
+    mortgage_amount: Decimal
+    date: date
+    description: Optional[str] = None
+
+
+class MortgagePaymentResult(BaseModel):
+    source_transaction_id: uuid.UUID
+    mortgage_transaction_id: uuid.UUID

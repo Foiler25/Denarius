@@ -27,6 +27,26 @@ export function useAmortization(
   });
 }
 
+export function useRemainingAmortization(
+  accountId: string,
+  extraPayment?: number,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ["mortgage", accountId, "amortization", "remaining", extraPayment],
+    queryFn: () =>
+      api
+        .get(`/accounts/${accountId}/mortgage/amortization`, {
+          params: {
+            from_current_balance: true,
+            ...(extraPayment !== undefined ? { extra_payment: extraPayment } : {}),
+          },
+        })
+        .then((r) => r.data),
+    enabled: !!accountId && enabled,
+  });
+}
+
 export function useCreateMortgage(accountId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -42,6 +62,29 @@ export function useUpdateMortgage(accountId: string) {
     mutationFn: (data: Record<string, unknown>) =>
       api.put(`/accounts/${accountId}/mortgage`, data).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["mortgage", accountId] }),
+  });
+}
+
+export function useRecordMortgagePayment(accountId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      source_account_id: string;
+      source_amount: number;
+      mortgage_amount: number;
+      date: string;
+      description?: string;
+    }) =>
+      api
+        .post(`/accounts/${accountId}/mortgage/record-payment`, data)
+        .then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["mortgage", accountId, "amortization", "remaining"] });
+      qc.invalidateQueries({ queryKey: ["networth"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 

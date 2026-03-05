@@ -54,7 +54,7 @@ interface Transaction {
 function getTxLabel(tx: Transaction): string {
   if (tx.recurring_item?.type === "subscription") return "Sub";
   if (tx.recurring_item?.type === "bill") return "Bill";
-  if (/mortgage|loan/i.test(tx.category?.name ?? "")) return "Loan";
+  if (/mortgage|loan/i.test(tx.category?.name ?? "")) return "Bill";
   return tx.type;
 }
 

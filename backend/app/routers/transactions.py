@@ -308,6 +308,20 @@ async def bulk_delete(
 async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: datetime) -> None:
     """Reverse the account balance effect of a transaction and soft-delete it."""
     await detach_recurring(txn, db)
+
+    # Cascade delete paired transaction (e.g. linked mortgage payment legs)
+    if txn.paired_transaction_id:
+        paired = await db.get(Transaction, txn.paired_transaction_id)
+        if paired and paired.deleted_at is None:
+            paired_account = await db.get(Account, paired.account_id)
+            if paired_account:
+                if paired.type == TransactionType.expense:
+                    paired_account.current_balance += paired.amount
+                elif paired.type == TransactionType.income:
+                    paired_account.current_balance -= paired.amount
+            paired.paired_transaction_id = None  # clear to prevent recursive cascade
+            paired.deleted_at = now
+
     txn.deleted_at = now
 
     account = await db.get(Account, txn.account_id)

@@ -51,6 +51,7 @@ class TransactionOut(BaseModel):
     transfer_account_id: Optional[uuid.UUID]
     recurring_item_id: Optional[uuid.UUID]
     expense_account_id: Optional[uuid.UUID] = None
+    paired_transaction_id: Optional[uuid.UUID] = None
     amount: Decimal
     type: TransactionType
     description: Optional[str]
