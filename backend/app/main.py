@@ -10,6 +10,7 @@ from app.routers import (
     auth, accounts, expense_accounts, mortgage, transactions, categories,
     budgets, recurring, networth, reports, dashboard, users, system,
 )
+from app.routers import export as export_router_module
 from app.scheduler.setup import start_scheduler, stop_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -70,3 +71,4 @@ app.include_router(reports.router, prefix=PREFIX)
 app.include_router(dashboard.router, prefix=PREFIX)
 app.include_router(users.router, prefix=PREFIX)
 app.include_router(system.router, prefix=PREFIX)
+app.include_router(export_router_module.router, prefix=PREFIX)

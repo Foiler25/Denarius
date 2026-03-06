@@ -34,7 +34,10 @@
       "Bash(psql -U denarius -d denarius -h localhost -p 5432 -c \"UPDATE users SET role = ''admin'' WHERE deleted_at IS NULL AND is_active = true RETURNING id, username, email, role;\")",
       "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"UPDATE users SET role = ''admin'' WHERE deleted_at IS NULL AND is_active = true RETURNING id, username, email, role;\")",
       "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT id, username, email, role, is_active, deleted_at FROM users;\")",
-      "Bash(/Users/loofa/Documents/Denarius/backend/app/schemas/mortgage.py:*)"
+      "Bash(/Users/loofa/Documents/Denarius/backend/app/schemas/mortgage.py:*)",
+      "Bash(ls -1 backend/app/schemas/*.py)",
+      "Bash(docker compose logs postgres --tail=30)",
+      "Bash(docker compose logs backend --tail=40)"
     ]
   },
   "enableAllProjectMcpServers": true,

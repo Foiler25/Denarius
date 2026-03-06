@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Moon, Sun, Globe } from "lucide-react";
+import { useState, useRef } from "react";
+import { Moon, Sun, Globe, Download, Upload } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import { useDashboardStore } from "@/store/dashboardStore";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/api/client";
 import { cn } from "@/lib/utils";
+import { exportData, importData, type ImportResult } from "@/api/export";
 
 interface Account {
   id: string;
@@ -322,6 +323,218 @@ function PreferencesTab() {
   );
 }
 
+// ---- Data Tab ----
+const EXPORT_ITEMS = [
+  { key: "include_categories", label: "Categories" },
+  { key: "include_accounts", label: "Accounts" },
+  { key: "include_expense_accounts", label: "Expense Accounts" },
+  { key: "include_recurring", label: "Bills & Recurring Items" },
+  { key: "include_budgets", label: "Budgets" },
+  { key: "include_mortgage", label: "Mortgage Details" },
+  { key: "include_networth", label: "Net Worth Snapshots" },
+  { key: "include_transactions", label: "Transactions" },
+] as const;
+
+type ExportKey = (typeof EXPORT_ITEMS)[number]["key"];
+
+function DataTab() {
+  const [selected, setSelected] = useState<Set<ExportKey>>(
+    new Set(EXPORT_ITEMS.map((i) => i.key))
+  );
+  const [txStartDate, setTxStartDate] = useState("");
+  const [txEndDate, setTxEndDate] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function toggleKey(key: ExportKey) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  async function handleExport() {
+    if (selected.size === 0) {
+      setExportError("Select at least one item to export.");
+      return;
+    }
+    setExporting(true);
+    setExportError(null);
+    try {
+      const params: Record<string, string | boolean> = {};
+      for (const key of selected) params[key] = true;
+      if (selected.has("include_transactions")) {
+        if (txStartDate) params["transaction_start_date"] = txStartDate;
+        if (txEndDate) params["transaction_end_date"] = txEndDate;
+      }
+      await exportData(params);
+    } catch {
+      setExportError("Export failed. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImport() {
+    const file = fileRef.current?.files?.[0];
+    if (!file) {
+      setImportError("Please select a JSON file to import.");
+      return;
+    }
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const result = await importData(file);
+      setImportResult(result);
+    } catch {
+      setImportError("Import failed. Make sure the file is a valid Denarius export.");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  const showDateRange = selected.has("include_transactions");
+
+  return (
+    <div className="space-y-4">
+      {/* Export */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Export Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Download a JSON backup of your selected data. All selected sections are combined into one file.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {EXPORT_ITEMS.map(({ key, label }) => (
+              <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={selected.has(key)}
+                  onChange={() => toggleKey(key)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                <span className="text-sm">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          {showDateRange && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Transaction date range (optional)</p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground w-10">From</label>
+                  <input
+                    type="date"
+                    value={txStartDate}
+                    onChange={(e) => setTxStartDate(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground w-10">To</label>
+                  <input
+                    type="date"
+                    value={txEndDate}
+                    onChange={(e) => setTxEndDate(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {exportError && (
+            <p className="text-xs text-destructive">{exportError}</p>
+          )}
+
+          <Button onClick={handleExport} disabled={exporting} size="sm" className="gap-2">
+            <Download className="h-4 w-4" />
+            {exporting ? "Exporting…" : "Export JSON"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Import */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Import Data
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Restore from a previously exported Denarius JSON file. Existing records are never overwritten — duplicates are skipped automatically.
+          </p>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json,application/json"
+              className="text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1 file:text-xs file:font-medium cursor-pointer"
+            />
+            <Button onClick={handleImport} disabled={importing} size="sm" variant="outline" className="gap-2">
+              <Upload className="h-4 w-4" />
+              {importing ? "Importing…" : "Import"}
+            </Button>
+          </div>
+
+          {importError && (
+            <p className="text-xs text-destructive">{importError}</p>
+          )}
+
+          {importResult && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2 text-xs">
+              {importResult.errors.length > 0 && (
+                <div>
+                  <p className="font-medium text-destructive mb-1">Errors ({importResult.errors.length})</p>
+                  <ul className="space-y-0.5 text-destructive/80">
+                    {importResult.errors.slice(0, 10).map((e, i) => (
+                      <li key={i} className="truncate">• {e}</li>
+                    ))}
+                    {importResult.errors.length > 10 && (
+                      <li className="text-muted-foreground">…and {importResult.errors.length - 10} more</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                {Object.keys({ ...importResult.imported, ...importResult.skipped }).map((section) => (
+                  <div key={section} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground capitalize">{section.replace(/_/g, " ")}</span>
+                    <span>
+                      <span className="text-emerald-600 font-medium">{importResult.imported[section] ?? 0} imported</span>
+                      {(importResult.skipped[section] ?? 0) > 0 && (
+                        <span className="text-muted-foreground ml-2">{importResult.skipped[section]} skipped</span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ---- Main Settings Page ----
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user);
@@ -339,6 +552,7 @@ export default function SettingsPage() {
           <TabsList>
             <TabsTrigger value="preferences">Preferences</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="data">Data</TabsTrigger>
           </TabsList>
 
           <TabsContent value="preferences" className="mt-6">
@@ -347,6 +561,10 @@ export default function SettingsPage() {
 
           <TabsContent value="users" className="mt-6">
             <UsersTab />
+          </TabsContent>
+
+          <TabsContent value="data" className="mt-6">
+            <DataTab />
           </TabsContent>
         </Tabs>
       ) : (

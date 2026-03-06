@@ -6,18 +6,27 @@ services:
   config-init:
     image: alpine:3.19
     restart: "no"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      JWT_SECRET: ${JWT_SECRET:-}
     volumes:
       - denarius_secrets:/secrets
     command: |
       sh -c '
       if [ ! -f /secrets/secrets.env ]; then
         echo "Generating secrets for first run..."
-        cat /dev/urandom | tr -dc a-f0-9 | head -c 64 > /tmp/jwt_secret
-        cat /dev/urandom | tr -dc a-zA-Z0-9 | head -c 32 > /tmp/pg_password
-        printf "JWT_SECRET=" > /secrets/secrets.env
-        cat /tmp/jwt_secret >> /secrets/secrets.env
-        printf "\n" >> /secrets/secrets.env
-        cp /tmp/pg_password /secrets/pg_password
+        if [ -n "$JWT_SECRET" ]; then
+          printf "JWT_SECRET=%s\n" "$JWT_SECRET" > /secrets/secrets.env
+        else
+          printf "JWT_SECRET=" > /secrets/secrets.env
+          cat /dev/urandom | tr -dc a-f0-9 | head -c 64 >> /secrets/secrets.env
+          printf "\n" >> /secrets/secrets.env
+        fi
+        if [ -n "$POSTGRES_PASSWORD" ]; then
+          printf "%s" "$POSTGRES_PASSWORD" > /secrets/pg_password
+        else
+          cat /dev/urandom | tr -dc a-zA-Z0-9 | head -c 32 > /secrets/pg_password
+        fi
         echo "Secrets generated and stored in volume."
       else
         echo "Secrets already exist, skipping generation."
@@ -30,9 +39,6 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-denarius}
       POSTGRES_USER: ${POSTGRES_USER:-denarius}
-      # If POSTGRES_PASSWORD is set in .env it takes priority; otherwise the
-      # auto-generated value from the secrets volume is used via PASSWORD_FILE.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
     volumes:
       - denarius_db_data:/var/lib/postgresql/data
