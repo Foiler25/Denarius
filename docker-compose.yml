@@ -1,17 +1,47 @@
 version: "3.9"
 
 services:
+  # Runs once on first launch to generate POSTGRES_PASSWORD and JWT_SECRET.
+  # Secrets are written to the denarius_secrets volume and reused on subsequent restarts.
+  config-init:
+    image: alpine:3.19
+    restart: "no"
+    volumes:
+      - denarius_secrets:/secrets
+    command: |
+      sh -c '
+      if [ ! -f /secrets/secrets.env ]; then
+        echo "Generating secrets for first run..."
+        cat /dev/urandom | tr -dc a-f0-9 | head -c 64 > /tmp/jwt_secret
+        cat /dev/urandom | tr -dc a-zA-Z0-9 | head -c 32 > /tmp/pg_password
+        printf "JWT_SECRET=" > /secrets/secrets.env
+        cat /tmp/jwt_secret >> /secrets/secrets.env
+        printf "\n" >> /secrets/secrets.env
+        cp /tmp/pg_password /secrets/pg_password
+        echo "Secrets generated and stored in volume."
+      else
+        echo "Secrets already exist, skipping generation."
+      fi
+      '
+
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-denarius}
       POSTGRES_USER: ${POSTGRES_USER:-denarius}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # If POSTGRES_PASSWORD is set in .env it takes priority; otherwise the
+      # auto-generated value from the secrets volume is used via PASSWORD_FILE.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
     volumes:
       - denarius_db_data:/var/lib/postgresql/data
+      - denarius_secrets:/run/secrets:ro
     networks:
       - denarius_net
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-denarius} -d ${POSTGRES_DB:-denarius}"]
       interval: 10s
@@ -24,21 +54,26 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-denarius}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-denarius}
-      JWT_SECRET: ${JWT_SECRET}
+      # DATABASE_URL and JWT_SECRET are built/sourced by the container entrypoint.
+      # Set them here only if you want to override auto-generation.
+      DATABASE_URL: ${DATABASE_URL:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-30}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:9723}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
       POSTGRES_USER: ${POSTGRES_USER:-denarius}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-denarius}
     volumes:
       - ./backups:/app/backups
+      - denarius_secrets:/run/secrets:ro
     networks:
       - denarius_net
     depends_on:
+      config-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
     healthcheck:
@@ -72,13 +107,17 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB:-denarius}
       POSTGRES_USER: ${POSTGRES_USER:-denarius}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      # PGPASSWORD is sourced from the secrets volume by the entrypoint if not set here.
+      PGPASSWORD: ${POSTGRES_PASSWORD:-}
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-30}
     volumes:
       - ./backups:/backups
+      - denarius_secrets:/run/secrets:ro
     networks:
       - denarius_net
     depends_on:
+      config-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -88,3 +127,4 @@ networks:
 
 volumes:
   denarius_db_data:
+  denarius_secrets:
