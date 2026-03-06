@@ -27,6 +27,7 @@ import {
   useUpdateCategory,
   useDeleteCategory,
 } from "@/api/categories";
+import { TransactionListDialog } from "@/components/TransactionListDialog";
 
 interface Category {
   id: string;
@@ -71,6 +72,8 @@ export default function CategoriesPage() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const [txDialog, setTxDialog] = useState<{ id: string; name: string } | null>(null);
 
   const categoryList: Category[] = Array.isArray(categories) ? categories : [];
 
@@ -162,7 +165,11 @@ export default function CategoriesPage() {
                   <table className="w-full text-sm">
                     <tbody>
                       {items.map((cat) => (
-                        <tr key={cat.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <tr
+                          key={cat.id}
+                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                          onClick={() => setTxDialog({ id: cat.id, name: cat.name })}
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               {cat.color && (
@@ -186,14 +193,14 @@ export default function CategoriesPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(cat)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEdit(cat); }}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => { setDeleteId(cat.id); setDeleteOpen(true); }}
+                                onClick={(e) => { e.stopPropagation(); setDeleteId(cat.id); setDeleteOpen(true); }}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
@@ -208,6 +215,16 @@ export default function CategoriesPage() {
             ) : null
           )}
         </div>
+      )}
+
+      {/* Transaction List Dialog */}
+      {txDialog && (
+        <TransactionListDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setTxDialog(null); }}
+          title={txDialog.name}
+          filter={{ kind: "category", id: txDialog.id }}
+        />
       )}
 
       {/* Add/Edit Dialog */}

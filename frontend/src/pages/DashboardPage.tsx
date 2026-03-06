@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowRight, CalendarClock, Plus, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, CalendarClock, Pencil, Plus, TrendingUp, Wallet } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -31,11 +31,14 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import { useDashboard } from "@/api/dashboard";
 import { useAccountBalanceHistory, useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
-import { useCreateTransaction } from "@/api/transactions";
+import { useCreateTransaction, useTransaction, useUpdateTransaction } from "@/api/transactions";
+import { useExpenseAccounts, type ExpenseAccountOut } from "@/api/expenseAccounts";
 import { useDashboardStore } from "@/store/dashboardStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { formatCurrency, formatDate, formatMonth, todayString, cn } from "@/lib/utils";
@@ -62,7 +65,7 @@ function formatChartDate(dateStr: string, granularity: "daily" | "monthly"): str
 
 
 function AccountBalancesChart() {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(7);
   const { data, isLoading } = useAccountBalanceHistory(days);
   const hiddenAccountIds = useDashboardStore((s) => s.hiddenAccountIds);
 
@@ -202,6 +205,288 @@ interface TxFormState {
   notes: string;
 }
 
+interface EditTxFormState extends TxFormState {
+  expense_account_id: string;
+}
+
+function DashboardEditTxDialog({
+  txId,
+  accounts,
+  expenseAccounts,
+  categories,
+  onClose,
+}: {
+  txId: string | null;
+  accounts: { id: string; name: string }[];
+  expenseAccounts: ExpenseAccountOut[];
+  categories: { id: string; name: string }[];
+  onClose: () => void;
+}) {
+  const { data: tx, isLoading } = useTransaction(txId);
+  const updateTx = useUpdateTransaction(txId ?? "");
+  const [form, setForm] = useState<EditTxFormState>({
+    date: "",
+    description: "",
+    amount: "",
+    type: "expense",
+    account_id: "",
+    transfer_account_id: "",
+    expense_account_id: "",
+    category_id: "none",
+    cleared: false,
+    notes: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
+
+  useEffect(() => {
+    if (tx) {
+      setForm({
+        date: tx.date,
+        description: tx.description ?? "",
+        amount: String(tx.amount),
+        type: tx.type,
+        account_id: tx.account_id,
+        transfer_account_id: tx.transfer_account_id ?? "",
+        expense_account_id: tx.expense_account_id ?? "",
+        category_id: tx.category_id ?? "none",
+        cleared: tx.is_cleared,
+        notes: tx.notes ?? "",
+      });
+    }
+  }, [tx]);
+
+  function buildPayload(override?: string): Record<string, unknown> {
+    return {
+      date: form.date,
+      description: form.description,
+      amount: form.amount,
+      type: form.type,
+      account_id: form.account_id,
+      is_cleared: form.cleared,
+      notes: form.notes || null,
+      category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
+      transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
+      expense_account_id: (form.type === "expense" || form.type === "income") && form.expense_account_id ? form.expense_account_id : null,
+      ...(override ? { once_per_month_override: override } : {}),
+    };
+  }
+
+  async function submitPayload(payload: Record<string, unknown>) {
+    try {
+      await updateTx.mutateAsync(payload);
+      setOverrideOpen(false);
+      setPendingPayload(null);
+      onClose();
+    } catch (err: unknown) {
+      const resp = (err as { response?: { status?: number; headers?: Record<string, string> } }).response;
+      if (resp?.status === 409 && resp.headers?.["x-conflict"] === "once_per_month") {
+        setPendingPayload(payload);
+        setOverrideOpen(true);
+      } else {
+        setError("Failed to save changes. Please try again.");
+      }
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!form.description.trim()) { setError("Description is required."); return; }
+    if (!form.amount || isNaN(parseFloat(form.amount))) { setError("Valid amount is required."); return; }
+    if (!form.account_id) { setError("Asset account is required."); return; }
+    if (form.type === "transfer" && !form.transfer_account_id) { setError("To account is required for transfers."); return; }
+    if (form.type === "transfer" && form.transfer_account_id === form.account_id) { setError("From and To accounts must be different."); return; }
+    await submitPayload(buildPayload());
+  }
+
+  return (
+    <>
+      <Dialog open={!!txId} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Transaction</DialogTitle>
+          </DialogHeader>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-6 w-6 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-4 py-2">
+                {error && (
+                  <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                    {error}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Date</Label>
+                    <Input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => setForm({ ...form, date: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Type</Label>
+                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, transfer_account_id: v !== "transfer" ? "" : form.transfer_account_id })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="expense">Expense</SelectItem>
+                        <SelectItem value="income">Income</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Description</Label>
+                  <Input
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Amount ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.amount}
+                      onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{form.type === "transfer" ? "From Asset Account" : "Asset Account"}</Label>
+                    <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {form.type === "transfer" && (
+                  <div className="space-y-1">
+                    <Label>To Asset Account</Label>
+                    <Select value={form.transfer_account_id} onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        {accounts.filter((a) => a.id !== form.account_id).map((a) => (
+                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {(form.type === "expense" || form.type === "income") && (
+                  <div className="space-y-1">
+                    <Label>Expense Account</Label>
+                    <Select value={form.expense_account_id || "none"} onValueChange={(v) => setForm({ ...form, expense_account_id: v === "none" ? "" : v })}>
+                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {accounts.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Asset Accounts</SelectLabel>
+                            {accounts.map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                        {expenseAccounts.length > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Expense Accounts</SelectLabel>
+                            {expenseAccounts.map((ea) => (
+                              <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Uncategorized</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Notes</Label>
+                  <Input
+                    placeholder="Optional notes"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit-cleared-dashboard"
+                    type="checkbox"
+                    checked={form.cleared}
+                    onChange={(e) => setForm({ ...form, cleared: e.target.checked })}
+                    className="h-4 w-4 rounded border-input"
+                  />
+                  <Label htmlFor="edit-cleared-dashboard">Cleared / Reconciled</Label>
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button type="submit" disabled={updateTx.isPending}>
+                  {updateTx.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={overrideOpen} onOpenChange={(o) => { if (!o) { setOverrideOpen(false); setPendingPayload(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Category already used this month</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This category is set to once per month but already has a transaction recorded. What type of payment is this?
+          </p>
+          <div className="flex flex-col gap-2 mt-2">
+            <Button onClick={() => pendingPayload && submitPayload({ ...pendingPayload, once_per_month_override: "extra_payment" })} disabled={updateTx.isPending} variant="outline">
+              Extra Payment
+              <span className="ml-2 text-xs text-muted-foreground">— additional payment, bill stays the same</span>
+            </Button>
+            <Button onClick={() => pendingPayload && submitPayload({ ...pendingPayload, once_per_month_override: "next_month_payment" })} disabled={updateTx.isPending} variant="outline">
+              Next Month Payment
+              <span className="ml-2 text-xs text-muted-foreground">— paying ahead, advances bill cycle</span>
+            </Button>
+          </div>
+          <DialogFooter className="mt-2">
+            <DialogClose asChild>
+              <Button variant="ghost" size="sm">Cancel</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 const emptyTxForm = (tz: string): TxFormState => ({
   date: todayString(tz),
   description: "",
@@ -222,9 +507,13 @@ export default function DashboardPage() {
   const visibleAccounts = accounts.filter((a) => a.is_active && !hiddenAccountIds.includes(a.id));
   const { timezone } = useSettingsStore();
 
+  const { data: expenseAccountsData } = useExpenseAccounts();
+  const expenseAccounts = expenseAccountsData ?? [];
+
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<TxFormState>(() => emptyTxForm(useSettingsStore.getState().timezone));
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
   const createTx = useCreateTransaction();
 
   async function handleAddSubmit(e: React.FormEvent) {
@@ -673,7 +962,7 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {dashboard.recent_transactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between">
+                  <div key={tx.id} className="flex items-center justify-between group">
                     <div className="flex flex-col min-w-0">
                       <span className="text-sm font-medium truncate">{tx.description}</span>
                       <span className="text-xs text-muted-foreground">
@@ -687,15 +976,25 @@ export default function DashboardPage() {
                         )}
                       </span>
                     </div>
-                    <span
-                      className={cn(
-                        "text-sm font-semibold ml-4 shrink-0",
-                        tx.type === "income" ? "text-emerald-600" : "text-destructive"
-                      )}
-                    >
-                      {tx.type === "income" ? "+" : "-"}
-                      {formatCurrency(tx.amount)}
-                    </span>
+                    <div className="flex items-center gap-1 ml-4 shrink-0">
+                      <span
+                        className={cn(
+                          "text-sm font-semibold",
+                          tx.type === "income" ? "text-emerald-600" : "text-destructive"
+                        )}
+                      >
+                        {tx.type === "income" ? "+" : "-"}
+                        {formatCurrency(tx.amount)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => setEditingTxId(tx.id)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -703,6 +1002,14 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <DashboardEditTxDialog
+        txId={editingTxId}
+        accounts={accounts}
+        expenseAccounts={expenseAccounts}
+        categories={categories}
+        onClose={() => setEditingTxId(null)}
+      />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import {
 } from "@/api/accounts";
 import api from "@/api/client";
 import { cn } from "@/lib/utils";
+import { TransactionListDialog } from "@/components/TransactionListDialog";
 
 interface Account {
   id: string;
@@ -128,6 +129,8 @@ export default function AccountsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [txDialog, setTxDialog] = useState<{ id: string; name: string } | null>(null);
 
   const accountList: Account[] = Array.isArray(accounts) ? accounts : [];
   const mortgageAccounts = accountList.filter((a) => a.type === "mortgage");
@@ -339,7 +342,11 @@ export default function AccountsPage() {
               </thead>
               <tbody>
                 {accountList.map((account) => (
-                  <tr key={account.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={account.id}
+                    className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                    onClick={() => setTxDialog({ id: account.id, name: account.name })}
+                  >
                     <td className="px-4 py-3 font-medium">
                       <div className="flex items-center gap-2">
                         <div
@@ -358,14 +365,14 @@ export default function AccountsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(account)}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); openEdit(account); }}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => { setDeleteId(account.id); setDeleteOpen(true); }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteId(account.id); setDeleteOpen(true); }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -673,6 +680,16 @@ export default function AccountsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Transaction List Dialog */}
+      {txDialog && (
+        <TransactionListDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setTxDialog(null); }}
+          title={txDialog.name}
+          filter={{ kind: "account", id: txDialog.id }}
+        />
+      )}
 
       {/* Delete Confirm */}
       <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setDeleteError(null); }}>

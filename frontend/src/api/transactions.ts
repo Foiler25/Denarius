@@ -8,6 +8,14 @@ export function useTransactions(params?: Record<string, unknown>) {
   });
 }
 
+export function useTransaction(id: string | null) {
+  return useQuery({
+    queryKey: ["transaction", id],
+    queryFn: () => api.get(`/transactions/${id}`).then((r) => r.data),
+    enabled: !!id,
+  });
+}
+
 export function useCreateTransaction() {
   const qc = useQueryClient();
   return useMutation({

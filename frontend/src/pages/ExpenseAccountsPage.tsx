@@ -19,6 +19,7 @@ import {
   useDeleteExpenseAccount,
   type ExpenseAccountOut,
 } from "@/api/expenseAccounts";
+import { TransactionListDialog } from "@/components/TransactionListDialog";
 
 interface ExpenseAccountFormState {
   name: string;
@@ -50,6 +51,8 @@ export default function ExpenseAccountsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [txDialog, setTxDialog] = useState<{ id: string; name: string } | null>(null);
 
   const accountList: ExpenseAccountOut[] = Array.isArray(accounts) ? accounts : [];
 
@@ -144,7 +147,11 @@ export default function ExpenseAccountsPage() {
               </thead>
               <tbody>
                 {accountList.map((account) => (
-                  <tr key={account.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr
+                    key={account.id}
+                    className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                    onClick={() => setTxDialog({ id: account.id, name: account.name })}
+                  >
                     <td className="px-4 py-3 font-medium">
                       <div className="flex items-center gap-2">
                         <div
@@ -160,7 +167,7 @@ export default function ExpenseAccountsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => openEdit(account)}
+                          onClick={(e) => { e.stopPropagation(); openEdit(account); }}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -168,7 +175,7 @@ export default function ExpenseAccountsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => { setDeleteId(account.id); setDeleteOpen(true); }}
+                          onClick={(e) => { e.stopPropagation(); setDeleteId(account.id); setDeleteOpen(true); }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -180,6 +187,16 @@ export default function ExpenseAccountsPage() {
             </table>
           </CardContent>
         </Card>
+      )}
+
+      {/* Transaction List Dialog */}
+      {txDialog && (
+        <TransactionListDialog
+          open={true}
+          onOpenChange={(o) => { if (!o) setTxDialog(null); }}
+          title={txDialog.name}
+          filter={{ kind: "expense_account", id: txDialog.id }}
+        />
       )}
 
       {/* Add/Edit Dialog */}

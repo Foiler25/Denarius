@@ -105,6 +105,28 @@ async def list_transactions(
     return PagedResponse(items=items, total=total, page=page, pages=-(-total // limit), limit=limit)
 
 
+@router.get("/{transaction_id}", response_model=TransactionOut)
+async def get_transaction(
+    transaction_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    txn = (
+        await db.execute(
+            select(Transaction)
+            .options(
+                selectinload(Transaction.category),
+                selectinload(Transaction.account),
+                selectinload(Transaction.expense_account),
+            )
+            .where(Transaction.id == transaction_id, Transaction.deleted_at == None)
+        )
+    ).scalar_one_or_none()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return txn
+
+
 @router.post("", response_model=TransactionOut, status_code=201)
 async def create_transaction(
     data: TransactionCreate,
