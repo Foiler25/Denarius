@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="50" fill="#3B82F6"/>
+  <!-- Lucide Coins icon, centered (original 24x24 viewBox, scaled to 60px and centered) -->
+  <g transform="translate(20, 20) scale(2.5)" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <circle cx="8" cy="8" r="6"/>
+    <path d="M18.09 10.37A6 6 0 1 1 10.34 18"/>
+    <path d="M7 6h1v4"/>
+    <path d="m16.71 13.88.7.71-2.82 2.82"/>
+  </g>
+</svg>

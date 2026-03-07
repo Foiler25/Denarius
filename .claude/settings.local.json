@@ -42,7 +42,12 @@
       "Bash(docker compose logs backend --tail=50)",
       "Bash(docker compose config --services)",
       "Bash(docker compose logs config-init)",
-      "Bash(docker inspect denarius-backend-1 --format '{{.RestartCount}} restarts, State: {{.State.Status}}, ExitCode: {{.State.ExitCode}}')"
+      "Bash(docker inspect denarius-backend-1 --format '{{.RestartCount}} restarts, State: {{.State.Status}}, ExitCode: {{.State.ExitCode}}')",
+      "Bash(python3 -c \"import cairosvg\")",
+      "Bash(npx --yes svgexport --version)",
+      "Bash(node -e \"const {execSync} = require\\(''child_process''\\); execSync\\(''npx --yes @resvg/resvg-js --version'', {stdio: ''inherit''}\\)\")",
+      "Bash(qlmanage -t -s 512 -o /tmp/ /Users/loofa/Documents/Denarius/frontend/public/favicon.svg)",
+      "Read(//private/tmp/**)"
     ]
   },
   "enableAllProjectMcpServers": true,
