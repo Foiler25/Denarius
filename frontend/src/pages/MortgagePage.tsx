@@ -218,7 +218,7 @@ export default function MortgagePage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mortgage</h1>
         <p className="text-muted-foreground text-sm">Amortization details and extra payment analysis.</p>
@@ -506,7 +506,7 @@ export default function MortgagePage() {
 
           {/* Record Payment Dialog */}
           <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-w-[95vw] sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Record Mortgage Payment</DialogTitle>
               </DialogHeader>

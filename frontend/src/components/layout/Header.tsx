@@ -1,4 +1,4 @@
-import { LogOut, User } from "lucide-react";
+import { LogOut, Menu, User } from "lucide-react";
 import { useAuthStore } from "@/store/authStore";
 import { logout } from "@/api/auth";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,10 @@ import {
 
 interface Props {
   title: string;
+  onMobileMenuOpen?: () => void;
 }
 
-export default function Header({ title }: Props) {
+export default function Header({ title, onMobileMenuOpen }: Props) {
   const { user, refreshToken } = useAuthStore();
 
   const handleLogout = async () => {
@@ -25,13 +26,26 @@ export default function Header({ title }: Props) {
   };
 
   return (
-    <header className="h-14 border-b bg-card px-6 flex items-center justify-between">
-      <h1 className="text-lg font-semibold">{title}</h1>
+    <header className="h-14 border-b bg-card px-4 sm:px-6 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        {/* Hamburger — mobile only */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="md:hidden shrink-0 px-2"
+          onClick={onMobileMenuOpen}
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <h1 className="text-lg font-semibold truncate">{title}</h1>
+      </div>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-2">
+          <Button variant="ghost" size="sm" className="gap-2 shrink-0">
             <User className="h-4 w-4" />
-            {user?.username}
+            <span className="hidden sm:inline">{user?.username}</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

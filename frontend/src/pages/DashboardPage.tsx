@@ -304,7 +304,7 @@ function DashboardEditTxDialog({
   return (
     <>
       <Dialog open={!!txId} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Transaction</DialogTitle>
           </DialogHeader>
@@ -459,7 +459,7 @@ function DashboardEditTxDialog({
       </Dialog>
 
       <Dialog open={overrideOpen} onOpenChange={(o) => { if (!o) { setOverrideOpen(false); setPendingPayload(null); } }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Category already used this month</DialogTitle>
           </DialogHeader>
@@ -545,7 +545,7 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         <div>
           <div className="h-7 w-36 bg-muted rounded animate-pulse mb-1" />
           <div className="h-4 w-56 bg-muted rounded animate-pulse" />
@@ -563,7 +563,7 @@ export default function DashboardPage() {
   if (isError) {
     const errMsg = (error as { message?: string })?.message ?? "Unknown error";
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 text-sm">
           Failed to load dashboard: {errMsg}
         </div>
@@ -619,7 +619,7 @@ export default function DashboardPage() {
   const cashFlow = dashboard.monthly_spending.current_month_income - dashboard.monthly_spending.current_month;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -632,7 +632,7 @@ export default function DashboardPage() {
               Add Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-[95vw] sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add Transaction</DialogTitle>
             </DialogHeader>

@@ -240,7 +240,7 @@ export default function BudgetsPage() {
     : null;
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -268,7 +268,7 @@ export default function BudgetsPage() {
                 Copy Month
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-sm">
+            <DialogContent className="max-w-[95vw] sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>Copy Budgets to Another Month</DialogTitle>
               </DialogHeader>
@@ -312,7 +312,7 @@ export default function BudgetsPage() {
                 Add Budget
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-sm">
+            <DialogContent className="max-w-[95vw] sm:max-w-sm">
               <DialogHeader>
                 <DialogTitle>Add Budget</DialogTitle>
               </DialogHeader>

@@ -221,8 +221,8 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
           <p className="text-muted-foreground text-sm">Browse and manage your financial activity.</p>
@@ -234,7 +234,7 @@ export default function TransactionsPage() {
               Add Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-[95vw] sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Add Transaction</DialogTitle>
             </DialogHeader>
@@ -558,7 +558,7 @@ export default function TransactionsPage() {
 
       {/* Once-Per-Month Override Prompt */}
       <Dialog open={overridePromptOpen} onOpenChange={(o) => { if (!o) { setOverridePromptOpen(false); setPendingPayload(null); } }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Category already used this month</DialogTitle>
           </DialogHeader>
@@ -585,7 +585,7 @@ export default function TransactionsPage() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Transaction?</DialogTitle>
           </DialogHeader>
@@ -736,7 +736,7 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                 <Pencil className="h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-[95vw] sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Edit Transaction</DialogTitle>
               </DialogHeader>
@@ -891,7 +891,7 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
 
       {/* Edit — Once-Per-Month Override Prompt */}
       <Dialog open={editOverrideOpen} onOpenChange={(o) => { if (!o) { setEditOverrideOpen(false); setPendingEditPayload(null); } }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Category already used this month</DialogTitle>
           </DialogHeader>

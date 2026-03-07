@@ -37,7 +37,12 @@
       "Bash(/Users/loofa/Documents/Denarius/backend/app/schemas/mortgage.py:*)",
       "Bash(ls -1 backend/app/schemas/*.py)",
       "Bash(docker compose logs postgres --tail=30)",
-      "Bash(docker compose logs backend --tail=40)"
+      "Bash(docker compose logs backend --tail=40)",
+      "Bash(docker compose ps)",
+      "Bash(docker compose logs backend --tail=50)",
+      "Bash(docker compose config --services)",
+      "Bash(docker compose logs config-init)",
+      "Bash(docker inspect denarius-backend-1 --format '{{.RestartCount}} restarts, State: {{.State.Status}}, ExitCode: {{.State.ExitCode}}')"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -107,7 +107,7 @@ export default function NetWorthPage() {
 
   if (currError) {
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-6">
         <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3">
           Failed to load net worth data.
         </div>
@@ -116,7 +116,7 @@ export default function NetWorthPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -322,7 +322,7 @@ export default function NetWorthPage() {
       {/* Snapshot Dialog (admin only) */}
       {isAdmin && (
         <Dialog open={snapshotOpen} onOpenChange={setSnapshotOpen}>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-[95vw] sm:max-w-sm">
             <DialogHeader>
               <DialogTitle>Record Net Worth Snapshot</DialogTitle>
             </DialogHeader>

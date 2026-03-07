@@ -282,7 +282,7 @@ function RecurringTab({
 
       {/* Add/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editItem ? "Edit" : "Add"} {label.slice(0, -1)}</DialogTitle>
           </DialogHeader>
@@ -451,7 +451,7 @@ function RecurringTab({
 
       {/* Delete Confirm */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete this item?</DialogTitle>
           </DialogHeader>
@@ -469,7 +469,7 @@ function RecurringTab({
 
       {/* Mark as Paid Dialog */}
       <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
           </DialogHeader>
@@ -623,7 +623,7 @@ function RecurringCard({
 
 export default function RecurringPage() {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Recurring</h1>
         <p className="text-muted-foreground text-sm">Manage subscriptions, bills, and recurring income.</p>

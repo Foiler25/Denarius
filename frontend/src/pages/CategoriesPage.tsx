@@ -135,7 +135,7 @@ export default function CategoriesPage() {
   const incomeCategories = sortedList.filter((c) => c.type === "income");
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{categoryList.length} categories</p>
         <Button size="sm" onClick={openAdd} className="flex items-center gap-1">
@@ -229,7 +229,7 @@ export default function CategoriesPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{editCategory ? "Edit Category" : "Add Category"}</DialogTitle>
           </DialogHeader>
@@ -296,7 +296,7 @@ export default function CategoriesPage() {
 
       {/* Delete Confirm */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Category?</DialogTitle>
           </DialogHeader>

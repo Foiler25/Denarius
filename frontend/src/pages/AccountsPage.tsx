@@ -315,7 +315,7 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{accountList.length} accounts</p>
         <Button size="sm" onClick={openAdd} className="flex items-center gap-1">
@@ -331,6 +331,7 @@ export default function AccountsPage() {
       ) : (
         <Card>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
@@ -382,6 +383,7 @@ export default function AccountsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -693,7 +695,7 @@ export default function AccountsPage() {
 
       {/* Delete Confirm */}
       <Dialog open={deleteOpen} onOpenChange={(open) => { setDeleteOpen(open); if (!open) setDeleteError(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete Account?</DialogTitle>
           </DialogHeader>

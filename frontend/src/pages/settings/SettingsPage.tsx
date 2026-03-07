@@ -541,7 +541,7 @@ export default function SettingsPage() {
   const isAdmin = user?.role === "admin";
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground text-sm">Manage preferences and users.</p>
