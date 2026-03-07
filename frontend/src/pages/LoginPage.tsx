@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -67,9 +66,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="flex flex-col items-center mb-8 gap-2">
-          <div className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground">
-            <Coins className="w-8 h-8" />
-          </div>
+          <img src="/coin.svg" alt="Denarius" className="w-14 h-14" />
           <h1 className="text-3xl font-bold tracking-tight">Denarius</h1>
           <p className="text-muted-foreground text-sm">Personal finance, clearly tracked.</p>
         </div>

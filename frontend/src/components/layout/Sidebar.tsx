@@ -9,7 +9,6 @@ import {
   TrendingUp,
   BarChart3,
   Settings,
-  Coins,
   Wallet,
   ShoppingCart,
   Tag,
@@ -116,9 +115,7 @@ export default function Sidebar({
             collapsed ? "justify-center px-2" : "px-6"
           )}
         >
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground shrink-0">
-            <Coins className="w-4 h-4" />
-          </div>
+          <img src="/coin.svg" alt="Denarius" className="w-8 h-8 shrink-0" />
           {!collapsed && (
             <span className="text-xl font-bold tracking-tight">Denarius</span>
           )}
