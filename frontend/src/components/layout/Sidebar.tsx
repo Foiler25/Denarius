@@ -116,7 +116,9 @@ export default function Sidebar({
             collapsed ? "justify-center px-2" : "px-6"
           )}
         >
-          <Coins className="h-6 w-6 text-sidebar-primary shrink-0" />
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground shrink-0">
+            <Coins className="w-4 h-4" />
+          </div>
           {!collapsed && (
             <span className="text-xl font-bold tracking-tight">Denarius</span>
           )}
