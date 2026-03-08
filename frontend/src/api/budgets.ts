@@ -47,3 +47,54 @@ export function useCopyMonth() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets"] }),
   });
 }
+
+export function useMonthlyTarget(month?: string) {
+  return useQuery({
+    queryKey: ["budgets", "monthly-target", month],
+    queryFn: () =>
+      api
+        .get("/budgets/monthly-target", { params: month ? { month } : {} })
+        .then((r) => r.data as { month: string; amount: number } | null)
+        .catch(() => null),
+    enabled: !!month,
+  });
+}
+
+export function useSetMonthlyTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { month: string; amount: number }) =>
+      api.put("/budgets/monthly-target", data).then((r) => r.data),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["budgets", "monthly-target", variables.month] });
+    },
+  });
+}
+
+export function useDeleteMonthlyTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (month: string) =>
+      api.delete("/budgets/monthly-target", { params: { month } }),
+    onSuccess: (_data, month) => {
+      qc.invalidateQueries({ queryKey: ["budgets", "monthly-target", month] });
+    },
+  });
+}
+
+export function useBudgetPreferences() {
+  return useQuery({
+    queryKey: ["budgets", "preferences"],
+    queryFn: () =>
+      api.get("/budgets/preferences").then((r) => r.data as { keep_for_next_month: boolean }),
+  });
+}
+
+export function useSetBudgetPreferences() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { keep_for_next_month: boolean }) =>
+      api.put("/budgets/preferences", data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets", "preferences"] }),
+  });
+}

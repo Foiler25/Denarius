@@ -7,6 +7,8 @@ from . import (  # noqa: F401
     category,
     transaction,
     budget,
+    monthly_budget_total,
+    app_setting,
     recurring_item,
     net_worth_snapshot,
     refresh_token,

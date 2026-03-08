@@ -28,39 +28,15 @@ import {
   useUpdateBudget,
   useDeleteBudget,
   useCopyMonth,
+  useMonthlyTarget,
+  useSetMonthlyTarget,
+  useDeleteMonthlyTarget,
+  useBudgetPreferences,
+  useSetBudgetPreferences,
 } from "@/api/budgets";
 import { useCategories } from "@/api/categories";
 import { formatCurrency, formatMonth, currentMonthParam, cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settingsStore";
-
-// ---- localStorage helpers ----
-
-function getTotalBudgets(): Record<string, number> {
-  try {
-    const v = localStorage.getItem("denarius-total-budgets");
-    return v ? JSON.parse(v) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveTotalBudget(month: string, amount: number | null) {
-  const all = getTotalBudgets();
-  if (amount === null) {
-    delete all[month];
-  } else {
-    all[month] = amount;
-  }
-  try { localStorage.setItem("denarius-total-budgets", JSON.stringify(all)); } catch {}
-}
-
-function getKeepBudgetPref(): boolean {
-  try { return localStorage.getItem("denarius-budget-keep") === "true"; } catch { return false; }
-}
-
-function saveKeepBudgetPref(v: boolean) {
-  try { localStorage.setItem("denarius-budget-keep", String(v)); } catch {}
-}
 
 // ---- Types ----
 
@@ -76,6 +52,7 @@ interface Budget {
 interface BudgetSummary {
   total_budgeted: number;
   total_spent: number;
+  uncategorized_spent: number;
   over_budget_count: number;
 }
 
@@ -108,16 +85,19 @@ export default function BudgetsPage() {
 
   const [month, setMonth] = useState<string>(() => currentMonthParam(useSettingsStore.getState().timezone));
 
-  // Total budget (per-month, localStorage)
-  const [totalBudget, setTotalBudgetState] = useState<number | null>(() => {
-    const all = getTotalBudgets();
-    return all[currentMonthParam(useSettingsStore.getState().timezone)] ?? null;
-  });
+  // Total budget (per-month, from DB)
+  const { data: monthlyTargetData } = useMonthlyTarget(month);
+  const setMonthlyTarget = useSetMonthlyTarget();
+  const deleteMonthlyTarget = useDeleteMonthlyTarget();
+
+  const totalBudget: number | null = monthlyTargetData?.amount ?? null;
   const [editingTotal, setEditingTotal] = useState(false);
   const [totalInput, setTotalInput] = useState("");
 
-  // Keep budget preference
-  const [keepBudget, setKeepBudgetState] = useState<boolean>(getKeepBudgetPref);
+  // Keep budget preference (from DB)
+  const { data: prefsData } = useBudgetPreferences();
+  const setPrefs = useSetBudgetPreferences();
+  const keepBudget: boolean = prefsData?.keep_for_next_month ?? false;
 
   // Add budget dialog
   const [addOpen, setAddOpen] = useState(false);
@@ -143,13 +123,7 @@ export default function BudgetsPage() {
   const copyMonth = useCopyMonth();
 
   const budgetList: Budget[] = Array.isArray(budgets) ? budgets : [];
-  const summaryData: BudgetSummary = summary ?? { total_budgeted: 0, total_spent: 0, over_budget_count: 0 };
-
-  // Sync totalBudget from localStorage when month changes
-  useEffect(() => {
-    const all = getTotalBudgets();
-    setTotalBudgetState(all[month] ?? null);
-  }, [month]);
+  const summaryData: BudgetSummary = summary ?? { total_budgeted: 0, total_spent: 0, uncategorized_spent: 0, over_budget_count: 0 };
 
   // Auto-copy budgets from previous month when keepBudget is on and current month is empty
   const autoCopiedRef = useRef<Set<string>>(new Set());
@@ -159,19 +133,11 @@ export default function BudgetsPage() {
       autoCopiedRef.current.add(month);
       const prevMonth = stepMonth(month, -1);
       copyMonth.mutate({ from_month: prevMonth, to_month: month });
-      // Also carry over total budget from previous month
-      const all = getTotalBudgets();
-      if (all[prevMonth] !== undefined && all[month] === undefined) {
-        all[month] = all[prevMonth];
-        try { localStorage.setItem("denarius-total-budgets", JSON.stringify(all)); } catch {}
-        setTotalBudgetState(all[month]);
-      }
     }
   }, [month, isLoading, budgetList.length, keepBudget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleKeepBudgetChange(v: boolean) {
-    setKeepBudgetState(v);
-    saveKeepBudgetPref(v);
+    setPrefs.mutate({ keep_for_next_month: v });
   }
 
   function openEditTotal() {
@@ -185,14 +151,12 @@ export default function BudgetsPage() {
       setEditingTotal(false);
       return;
     }
-    saveTotalBudget(month, val);
-    setTotalBudgetState(val);
+    setMonthlyTarget.mutate({ month, amount: val });
     setEditingTotal(false);
   }
 
   function handleClearTotal() {
-    saveTotalBudget(month, null);
-    setTotalBudgetState(null);
+    deleteMonthlyTarget.mutate(month);
     setEditingTotal(false);
   }
 
@@ -483,7 +447,7 @@ export default function BudgetsPage() {
 
       {/* Summary Cards (category-level) */}
       {summary && (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-5 pb-4">
               <p className="text-xs text-muted-foreground mb-1">Category Budgeted</p>
@@ -500,9 +464,15 @@ export default function BudgetsPage() {
           </Card>
           <Card>
             <CardContent className="pt-5 pb-4">
-              <p className="text-xs text-muted-foreground mb-1">
-                {totalBudget !== null ? "vs Categories" : "Remaining"}
+              <p className="text-xs text-muted-foreground mb-1">Untracked</p>
+              <p className={cn("text-xl font-bold", summaryData.uncategorized_spent > 0 ? "text-amber-500" : "text-foreground")}>
+                {formatCurrency(summaryData.uncategorized_spent)}
               </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-5 pb-4">
+              <p className="text-xs text-muted-foreground mb-1">Remaining</p>
               <p className={cn("text-xl font-bold", summaryData.total_budgeted - summaryData.total_spent < 0 ? "text-destructive" : "text-emerald-500")}>
                 {formatCurrency(summaryData.total_budgeted - summaryData.total_spent)}
               </p>

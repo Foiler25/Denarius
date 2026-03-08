@@ -35,9 +35,28 @@ class BudgetWithSpent(BudgetOut):
 class BudgetSummary(BaseModel):
     total_budgeted: float
     total_spent: float
+    uncategorized_spent: float
     over_budget_categories: list[BudgetWithSpent]
 
 
 class CopyMonthRequest(BaseModel):
     from_month: date
     to_month: date
+
+
+class MonthlyTargetOut(BaseModel):
+    month: date
+    amount: float
+
+
+class MonthlyTargetSet(BaseModel):
+    month: date
+    amount: Decimal
+
+
+class BudgetPrefsOut(BaseModel):
+    keep_for_next_month: bool
+
+
+class BudgetPrefsUpdate(BaseModel):
+    keep_for_next_month: bool

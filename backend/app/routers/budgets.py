@@ -10,21 +10,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_current_user, get_db
+from app.models.app_setting import AppSetting
 from app.models.budget import Budget
 from app.models.category import Category
+from app.models.monthly_budget_total import MonthlyBudgetTotal
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.schemas.budget import (
     BudgetCreate,
     BudgetOut,
+    BudgetPrefsOut,
+    BudgetPrefsUpdate,
     BudgetSummary,
     BudgetUpdate,
     BudgetWithSpent,
     CopyMonthRequest,
+    MonthlyTargetOut,
+    MonthlyTargetSet,
 )
 from app.utils.date_utils import first_of_month
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
+
+_KEEP_PREF_KEY = "keep_for_next_month"
 
 
 async def _budgets_with_spent(month: date, db: AsyncSession) -> list[BudgetWithSpent]:
@@ -107,15 +115,137 @@ async def budget_summary(
     current_user: User = Depends(get_current_user),
 ):
     target_month = month or date.today()
+    month_start = first_of_month(target_month)
+    if month_start.month == 12:
+        month_end = month_start.replace(year=month_start.year + 1, month=1, day=1)
+    else:
+        month_end = month_start.replace(month=month_start.month + 1)
+
     items = await _budgets_with_spent(target_month, db)
     total_budgeted = sum(b.amount for b in items)
-    total_spent = sum(b.actual_spent for b in items)
     over_budget = [b for b in items if b.is_over_budget]
+
+    # ALL expense spending for the month (true total)
+    total_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .where(
+            Transaction.type == TransactionType.expense,
+            Transaction.date >= month_start,
+            Transaction.date < month_end,
+            Transaction.deleted_at == None,
+        )
+    )
+    total_spent = float(total_result.scalar() or Decimal("0"))
+
+    # Non-recurring spend with no category OR in an unbudgeted category
+    budgeted_category_ids = [b.category_id for b in items]
+    if budgeted_category_ids:
+        untracked_filter = ~Transaction.category_id.in_(budgeted_category_ids)
+    else:
+        untracked_filter = Transaction.category_id == None
+    untracked_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .where(
+            Transaction.type == TransactionType.expense,
+            Transaction.date >= month_start,
+            Transaction.date < month_end,
+            Transaction.deleted_at == None,
+            Transaction.recurring_item_id == None,
+            untracked_filter,
+        )
+    )
+    uncategorized_spent = float(untracked_result.scalar() or Decimal("0"))
+
     return BudgetSummary(
-        total_budgeted=total_budgeted,
+        total_budgeted=float(total_budgeted),
         total_spent=total_spent,
+        uncategorized_spent=uncategorized_spent,
         over_budget_categories=over_budget,
     )
+
+
+@router.get("/monthly-target", response_model=Optional[MonthlyTargetOut])
+async def get_monthly_target(
+    month: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    month_start = first_of_month(month)
+    result = await db.execute(
+        select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == month_start)
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        return None
+    return MonthlyTargetOut(month=row.month, amount=float(row.amount))
+
+
+@router.put("/monthly-target", response_model=MonthlyTargetOut)
+async def set_monthly_target(
+    data: MonthlyTargetSet,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    month_start = first_of_month(data.month)
+    result = await db.execute(
+        select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == month_start)
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        row.amount = data.amount
+    else:
+        row = MonthlyBudgetTotal(month=month_start, amount=data.amount)
+        db.add(row)
+    await db.commit()
+    return MonthlyTargetOut(month=row.month, amount=float(row.amount))
+
+
+@router.delete("/monthly-target", status_code=204)
+async def delete_monthly_target(
+    month: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    month_start = first_of_month(month)
+    result = await db.execute(
+        select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == month_start)
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        await db.commit()
+
+
+@router.get("/preferences", response_model=BudgetPrefsOut)
+async def get_budget_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == _KEEP_PREF_KEY)
+    )
+    row = result.scalar_one_or_none()
+    return BudgetPrefsOut(keep_for_next_month=row.value == "true" if row else False)
+
+
+@router.put("/preferences", response_model=BudgetPrefsOut)
+async def set_budget_preferences(
+    data: BudgetPrefsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(AppSetting).where(AppSetting.key == _KEEP_PREF_KEY)
+    )
+    row = result.scalar_one_or_none()
+    val = "true" if data.keep_for_next_month else "false"
+    if row:
+        row.value = val
+    else:
+        row = AppSetting(key=_KEEP_PREF_KEY, value=val)
+        db.add(row)
+    await db.commit()
+    return BudgetPrefsOut(keep_for_next_month=data.keep_for_next_month)
 
 
 @router.get("/{budget_id}", response_model=BudgetOut)
@@ -137,8 +267,10 @@ async def update_budget(
     budget = await _get_or_404(budget_id, db)
     budget.amount = data.amount
     await db.commit()
-    await db.refresh(budget)
-    return budget
+    result = await db.execute(
+        select(Budget).options(selectinload(Budget.category)).where(Budget.id == budget_id)
+    )
+    return result.scalar_one()
 
 
 @router.delete("/{budget_id}", status_code=204)
