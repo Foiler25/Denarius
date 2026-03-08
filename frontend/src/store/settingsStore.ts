@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import api from "@/api/client";
 
 const STORAGE_KEY = "denarius-settings";
 
@@ -26,11 +27,20 @@ function writeTimezone(tz: string) {
 interface SettingsState {
   timezone: string;
   setTimezone: (tz: string) => void;
+  setTimezoneLocal: (tz: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   timezone: readTimezone(),
+  // Called by admin to change the app-wide timezone — writes to DB
   setTimezone: (tz) =>
+    set(() => {
+      writeTimezone(tz);
+      api.put("/system/timezone", { timezone: tz });
+      return { timezone: tz };
+    }),
+  // Called on app boot to hydrate from DB without triggering a write-back
+  setTimezoneLocal: (tz) =>
     set(() => {
       writeTimezone(tz);
       return { timezone: tz };

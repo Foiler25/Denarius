@@ -1,8 +1,9 @@
 import enum
 import uuid
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, Enum, Text
 from sqlalchemy.orm import Mapped, mapped_column
+from typing import Optional
 from app.models.base import Base, UUIDMixin, TimestampMixin
 
 
@@ -22,3 +23,5 @@ class User(Base, UUIDMixin, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    theme_dark: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    dashboard_hidden_accounts: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

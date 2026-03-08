@@ -1,4 +1,6 @@
+import json
 import uuid
+from typing import Optional
 
 from pydantic import BaseModel, EmailStr, field_validator
 
@@ -48,3 +50,17 @@ class UserOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    theme_dark: Optional[bool] = None
+    dashboard_hidden_accounts: Optional[list[str]] = None
+
+    @field_validator("dashboard_hidden_accounts", mode="before")
+    @classmethod
+    def parse_hidden_accounts(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+
+class UserPreferencesUpdate(BaseModel):
+    theme_dark: Optional[bool] = None
+    dashboard_hidden_accounts: Optional[list[str]] = None

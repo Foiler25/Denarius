@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "@/store/authStore";
-import { tryRefresh, getMe } from "@/api/auth";
+import { tryRefresh, getMe, fetchSystemTimezone } from "@/api/auth";
 
 interface Props {
   children: React.ReactNode;
@@ -15,7 +15,7 @@ export default function ProtectedRoute({ children }: Props) {
     if (!isAuthenticated && refreshToken) {
       tryRefresh()
         .then((ok) => {
-          if (ok) return getMe();
+          if (ok) return Promise.all([getMe(), fetchSystemTimezone()]);
         })
         .finally(() => setLoading(false));
     }

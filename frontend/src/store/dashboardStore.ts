@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { updatePreferences } from "@/api/auth";
+import { useAuthStore } from "./authStore";
 
 const STORAGE_KEY = "denarius-chart-hidden-accounts";
 
@@ -15,6 +17,7 @@ function readHiddenAccounts(): string[] {
 interface DashboardState {
   hiddenAccountIds: string[];
   toggleAccount: (id: string) => void;
+  setHiddenAccounts: (ids: string[]) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -27,6 +30,14 @@ export const useDashboardStore = create<DashboardState>((set) => ({
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {}
+      const user = useAuthStore.getState().user;
+      if (user) updatePreferences(user.id, { dashboard_hidden_accounts: next });
       return { hiddenAccountIds: next };
     }),
+  setHiddenAccounts: (ids) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+    } catch {}
+    set({ hiddenAccountIds: ids });
+  },
 }));

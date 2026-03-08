@@ -204,6 +204,8 @@ function PreferencesTab() {
   const { hiddenAccountIds, toggleAccount } = useDashboardStore();
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const accountList: Account[] = Array.isArray(accounts) ? accounts : [];
+  const currentUser = useAuthStore.getState().user;
+  const isAdmin = currentUser?.role === "admin";
 
   const [tzSearch, setTzSearch] = useState("");
   const filteredTzs = tzSearch.trim()
@@ -251,8 +253,9 @@ function PreferencesTab() {
               <p className="text-sm font-medium">Timezone</p>
               <p className="text-xs text-muted-foreground">
                 Controls which day "today" falls on and how dates default throughout the app.
+                {!isAdmin && " Only admins can change this."}
               </p>
-              <Select value={timezone} onValueChange={setTimezone}>
+              <Select value={timezone} onValueChange={setTimezone} disabled={!isAdmin}>
                 <SelectTrigger className="w-full">
                   <SelectValue>{currentTzLabel}</SelectValue>
                 </SelectTrigger>

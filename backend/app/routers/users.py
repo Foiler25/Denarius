@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import Optional
 from pydantic import BaseModel, EmailStr
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, require_admin, get_db
 from app.models.user import User, UserRole
-from app.schemas.auth import UserOut
+from app.schemas.auth import UserOut, UserPreferencesUpdate
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -81,6 +82,27 @@ async def update_role(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.role = data.role
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.patch("/{user_id}/preferences", response_model=UserOut)
+async def update_preferences(
+    user_id: uuid.UUID,
+    data: UserPreferencesUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.admin and current_user.id != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    user = await db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    if data.theme_dark is not None:
+        user.theme_dark = data.theme_dark
+    if data.dashboard_hidden_accounts is not None:
+        user.dashboard_hidden_accounts = json.dumps(data.dashboard_hidden_accounts)
     await db.commit()
     await db.refresh(user)
     return user

@@ -1,10 +1,14 @@
 import { create } from "zustand";
+import { useThemeStore } from "./themeStore";
+import { useDashboardStore } from "./dashboardStore";
 
-interface User {
+export interface User {
   id: string;
   username: string;
   email: string;
   role: "admin" | "member";
+  theme_dark?: boolean | null;
+  dashboard_hidden_accounts?: string[] | null;
 }
 
 interface AuthState {
@@ -17,6 +21,15 @@ interface AuthState {
   logout: () => void;
 }
 
+function applyUserPreferences(user: User) {
+  if (user.theme_dark != null) {
+    useThemeStore.getState().setDark(user.theme_dark);
+  }
+  if (user.dashboard_hidden_accounts != null) {
+    useDashboardStore.getState().setHiddenAccounts(user.dashboard_hidden_accounts);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
   refreshToken: localStorage.getItem("refresh_token"),
@@ -26,7 +39,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem("refresh_token", refreshToken);
     set({ accessToken, refreshToken, isAuthenticated: true });
   },
-  setUser: (user) => set({ user }),
+  setUser: (user) => {
+    applyUserPreferences(user);
+    set({ user });
+  },
   logout: () => {
     localStorage.removeItem("refresh_token");
     set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });

@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { updatePreferences } from "@/api/auth";
+import { useAuthStore } from "./authStore";
 
 function readDark(): boolean {
   try {
@@ -23,6 +25,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
       const next = !s.isDark;
       try { localStorage.setItem("denarius-dark", String(next)); } catch {}
       document.documentElement.classList.toggle("dark", next);
+      const user = useAuthStore.getState().user;
+      if (user) updatePreferences(user.id, { theme_dark: next });
       return { isDark: next };
     }),
   setDark: (v) =>
