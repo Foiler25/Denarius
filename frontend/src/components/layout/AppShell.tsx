@@ -45,9 +45,9 @@ export default function AppShell() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex min-h-dvh">
       {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:flex">
+      <div className="hidden md:flex sticky top-0 h-dvh shrink-0">
         <Sidebar
           collapsed={collapsed}
           onToggle={handleToggle}
@@ -61,9 +61,9 @@ export default function AppShell() {
         </SheetContent>
       </Sheet>
 
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header title={title} onMobileMenuOpen={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto bg-background">
+        <main className="flex-1 bg-background">
           <Outlet />
         </main>
       </div>
