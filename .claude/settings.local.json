@@ -18,10 +18,7 @@
       "Bash(docker compose build frontend)",
       "Bash(docker compose up -d frontend)",
       "Bash(curl -s http://localhost:9723/api/v1/system/health)",
-      "mcp__grepai__grepai_index_status",
-      "mcp__grepai__grepai_list_workspaces",
-      "mcp__grepai__grepai_search",
-      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
+"Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
       "Bash(npx tsc --noEmit)",
       "Bash(docker compose exec db psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
       "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
@@ -47,11 +44,13 @@
       "Bash(npx --yes svgexport --version)",
       "Bash(node -e \"const {execSync} = require\\(''child_process''\\); execSync\\(''npx --yes @resvg/resvg-js --version'', {stdio: ''inherit''}\\)\")",
       "Bash(qlmanage -t -s 512 -o /tmp/ /Users/loofa/Documents/Denarius/frontend/public/favicon.svg)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Read(//Users/loofa/.claude/**)",
+      "Read(//Users/loofa/.config/claude/**)"
     ]
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
-    "grepai"
+    ""
   ]
 }
