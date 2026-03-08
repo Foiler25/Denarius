@@ -1,11 +1,12 @@
 import uuid
 from collections import defaultdict
+from decimal import Decimal
 from typing import Optional
 from datetime import date, datetime, timezone
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
@@ -38,7 +39,10 @@ async def create_account(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    account = Account(**data.model_dump())
+    account_data = data.model_dump()
+    # On creation there are no transactions yet, so initial_balance equals current_balance
+    account_data["initial_balance"] = account_data["current_balance"]
+    account = Account(**account_data)
     db.add(account)
     await db.commit()
     await db.refresh(account)
@@ -151,7 +155,13 @@ async def update_account(
     current_user: User = Depends(get_current_user),
 ):
     account = await _get_or_404(account_id, db)
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    # If current_balance is being explicitly set, recompute initial_balance so that
+    # the invariant (initial_balance + sum(transactions) == current_balance) holds.
+    if "current_balance" in updates:
+        txn_sum = await _get_transaction_sum(account_id, db)
+        updates["initial_balance"] = updates["current_balance"] - txn_sum
+    for field, value in updates.items():
         setattr(account, field, value)
     await db.commit()
     await db.refresh(account)
@@ -199,7 +209,25 @@ async def update_balance(
     current_user: User = Depends(get_current_user),
 ):
     account = await _get_or_404(account_id, db)
+    txn_sum = await _get_transaction_sum(account_id, db)
+    account.initial_balance = data.balance - txn_sum
     account.current_balance = data.balance
+    await db.commit()
+    await db.refresh(account)
+    return account
+
+
+@router.post("/{account_id}/recalculate", response_model=AccountOut)
+async def recalculate_balance(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Recompute current_balance from initial_balance + sum(transactions).
+    Use this to recover from any balance drift or data corruption."""
+    account = await _get_or_404(account_id, db)
+    txn_sum = await _get_transaction_sum(account_id, db)
+    account.current_balance = account.initial_balance + txn_sum
     await db.commit()
     await db.refresh(account)
     return account
@@ -231,3 +259,27 @@ async def _get_or_404(account_id: uuid.UUID, db: AsyncSession) -> Account:
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
+
+
+async def _get_transaction_sum(account_id: uuid.UUID, db: AsyncSession) -> Decimal:
+    """Sum all non-deleted transactions for an account applying sign convention:
+    income → +amount, expense → -amount, transfer (source leg) → -amount."""
+    result = await db.execute(
+        select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Transaction.type == TransactionType.income, Transaction.amount),
+                        (Transaction.type == TransactionType.expense, -Transaction.amount),
+                        (Transaction.type == TransactionType.transfer, -Transaction.amount),
+                        else_=Decimal("0"),
+                    )
+                ),
+                Decimal("0"),
+            )
+        ).where(
+            Transaction.account_id == account_id,
+            Transaction.deleted_at == None,
+        )
+    )
+    return result.scalar() or Decimal("0")

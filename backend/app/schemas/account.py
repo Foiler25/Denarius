@@ -45,6 +45,7 @@ class AccountOut(BaseModel):
     institution: Optional[str]
     account_number: Optional[str]
     current_balance: Decimal
+    initial_balance: Decimal
     credit_limit: Optional[Decimal]
     is_active: bool
     sort_order: int

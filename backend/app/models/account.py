@@ -32,6 +32,9 @@ class Account(Base, UUIDMixin, TimestampMixin):
     current_balance: Mapped[Decimal] = mapped_column(
         Numeric(15, 2), nullable=False, default=Decimal("0.00")
     )
+    initial_balance: Mapped[Decimal] = mapped_column(
+        Numeric(15, 2), nullable=False, default=Decimal("0.00")
+    )
     credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
