@@ -39,6 +39,7 @@ interface Account {
   current_balance: number;
   is_active: boolean;
   institution?: string;
+  account_number?: string;
   notes?: string;
   color?: string;
   linked_mortgage_id?: string;
@@ -150,7 +151,7 @@ export default function AccountsPage() {
       type: account.type,
       balance: String(account.current_balance),
       institution: account.institution ?? "",
-      account_number: "",
+      account_number: account.account_number ?? "",
       notes: account.notes ?? "",
       color: account.color ?? "#6B7280",
       original_principal: "",
@@ -209,6 +210,7 @@ export default function AccountsPage() {
       type: form.type,
       current_balance: parseFloat(form.balance),
       institution: form.institution || undefined,
+      account_number: form.account_number || undefined,
       notes: form.notes || undefined,
       color: form.color,
       linked_mortgage_id: resolvedLinkedMortgageId,

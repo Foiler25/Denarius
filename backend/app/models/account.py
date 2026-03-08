@@ -28,6 +28,7 @@ class Account(Base, UUIDMixin, TimestampMixin):
         Enum(AccountType, name="account_type"), nullable=False
     )
     institution: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    account_number: Mapped[str | None] = mapped_column(String(4), nullable=True)
     current_balance: Mapped[Decimal] = mapped_column(
         Numeric(15, 2), nullable=False, default=Decimal("0.00")
     )

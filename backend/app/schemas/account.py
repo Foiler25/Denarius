@@ -9,6 +9,7 @@ class AccountCreate(BaseModel):
     name: str
     type: AccountType
     institution: Optional[str] = None
+    account_number: Optional[str] = None
     current_balance: Decimal = Decimal("0.00")
     credit_limit: Optional[Decimal] = None
     sort_order: int = 0
@@ -21,6 +22,7 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[AccountType] = None
     institution: Optional[str] = None
+    account_number: Optional[str] = None
     current_balance: Optional[Decimal] = None
     credit_limit: Optional[Decimal] = None
     is_active: Optional[bool] = None
@@ -41,6 +43,7 @@ class AccountOut(BaseModel):
     name: str
     type: AccountType
     institution: Optional[str]
+    account_number: Optional[str]
     current_balance: Decimal
     credit_limit: Optional[Decimal]
     is_active: bool

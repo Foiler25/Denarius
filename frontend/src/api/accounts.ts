@@ -12,6 +12,7 @@ export interface AccountOut {
   name: string;
   type: string;
   institution?: string;
+  account_number?: string;
   current_balance: number;
   credit_limit?: number;
   is_active: boolean;
