@@ -13,6 +13,7 @@ from app.dependencies import get_current_user, get_db
 from app.models.account import Account
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
+from app.routers.system import get_app_date
 from app.schemas.account import AccountBalanceUpdate, AccountCreate, AccountOut, AccountUpdate
 from app.schemas.transaction import TransactionOut
 from app.utils.pagination import PagedResponse
@@ -57,7 +58,7 @@ async def get_balance_history(
 ):
     from datetime import timedelta
 
-    today = date.today()
+    today = await get_app_date(db)
 
     # ≤90 days → daily granularity; >90 days → monthly (approximate months from days)
     if days <= 90:

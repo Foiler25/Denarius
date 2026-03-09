@@ -12,6 +12,7 @@ from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.routers.budgets import _budgets_with_spent
+from app.routers.system import get_app_date
 from app.schemas.dashboard import DashboardSummary, MonthlySpendingSummary
 from app.schemas.transaction import TransactionOut
 from app.services.networth_service import get_current_net_worth
@@ -25,7 +26,7 @@ async def dashboard_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    today = date.today()
+    today = await get_app_date(db)
     current_month_start = first_of_month(today)
     if current_month_start.month == 1:
         prev_month_start = current_month_start.replace(year=current_month_start.year - 1, month=12)

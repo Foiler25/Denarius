@@ -10,6 +10,7 @@ from app.dependencies import get_current_user, get_db
 from app.models.category import Category
 from app.models.recurring_item import RecurringItem, RecurringType
 from app.models.user import User
+from app.routers.system import get_app_date
 from app.schemas.recurring_item import MarkPaidRequest, RecurringCreate, RecurringOut, RecurringUpdate
 from app.services.recurring_service import mark_paid, match_unlinked_current_month
 from app.utils.date_utils import rewind_by_frequency
@@ -17,8 +18,7 @@ from app.utils.date_utils import rewind_by_frequency
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
 
-def _with_days_until_due(item: RecurringItem) -> RecurringOut:
-    today = date.today()
+def _with_days_until_due(item: RecurringItem, today: date) -> RecurringOut:
     days = (item.next_due_date - today).days
     out = RecurringOut.model_validate(item)
     out.days_until_due = days
@@ -35,13 +35,14 @@ async def list_recurring(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    today = await get_app_date(db)
     q = select(RecurringItem).where(RecurringItem.deleted_at == None)
     if type:
         q = q.where(RecurringItem.type == type)
     if is_active is not None:
         q = q.where(RecurringItem.is_active == is_active)
     result = await db.execute(q.order_by(RecurringItem.next_due_date))
-    return [_with_days_until_due(item) for item in result.scalars().all()]
+    return [_with_days_until_due(item, today) for item in result.scalars().all()]
 
 
 @router.get("/upcoming", response_model=list[RecurringOut])
@@ -51,7 +52,8 @@ async def upcoming_recurring(
     current_user: User = Depends(get_current_user),
 ):
     from datetime import timedelta
-    cutoff = date.today() + timedelta(days=days)
+    today = await get_app_date(db)
+    cutoff = today + timedelta(days=days)
     result = await db.execute(
         select(RecurringItem)
         .where(
@@ -61,7 +63,7 @@ async def upcoming_recurring(
         )
         .order_by(RecurringItem.next_due_date)
     )
-    return [_with_days_until_due(item) for item in result.scalars().all()]
+    return [_with_days_until_due(item, today) for item in result.scalars().all()]
 
 
 async def _check_once_per_month_category(
@@ -101,7 +103,7 @@ async def create_recurring(
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    return _with_days_until_due(item)
+    return _with_days_until_due(item, await get_app_date(db))
 
 
 @router.get("/{item_id}", response_model=RecurringOut)
@@ -110,7 +112,7 @@ async def get_recurring(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return _with_days_until_due(await _get_or_404(item_id, db))
+    return _with_days_until_due(await _get_or_404(item_id, db), await get_app_date(db))
 
 
 @router.put("/{item_id}", response_model=RecurringOut)
@@ -128,7 +130,7 @@ async def update_recurring(
     await match_unlinked_current_month(item, db)
     await db.commit()
     await db.refresh(item)
-    return _with_days_until_due(item)
+    return _with_days_until_due(item, await get_app_date(db))
 
 
 @router.delete("/{item_id}", status_code=204)
@@ -152,7 +154,7 @@ async def mark_paid_endpoint(
     item = await _get_or_404(item_id, db)
     await mark_paid(item, db, current_user.id, data.date, data.amount)
     await db.refresh(item)
-    return _with_days_until_due(item)
+    return _with_days_until_due(item, await get_app_date(db))
 
 
 async def _get_or_404(item_id: uuid.UUID, db: AsyncSession) -> RecurringItem:

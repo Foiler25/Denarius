@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from app.dependencies import get_current_user, get_db
 from app.models.app_setting import AppSetting
 from app.models.budget import Budget
+from app.routers.system import get_app_date
 from app.models.category import Category
 from app.models.monthly_budget_total import MonthlyBudgetTotal
 from app.models.transaction import Transaction, TransactionType
@@ -81,7 +82,7 @@ async def list_budgets(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target_month = month or date.today()
+    target_month = month or await get_app_date(db)
     return await _budgets_with_spent(target_month, db)
 
 
@@ -114,7 +115,7 @@ async def budget_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target_month = month or date.today()
+    target_month = month or await get_app_date(db)
     month_start = first_of_month(target_month)
     if month_start.month == 12:
         month_end = month_start.replace(year=month_start.year + 1, month=1, day=1)

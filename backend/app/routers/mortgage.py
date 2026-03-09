@@ -14,6 +14,7 @@ from app.models.category import Category
 from app.models.mortgage_detail import MortgageDetail
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
+from app.routers.system import get_app_date
 from app.schemas.mortgage import (
     AmortizationRow,
     ExtraPaymentCalcRequest,
@@ -86,7 +87,7 @@ async def get_amortization(
 
     if from_current_balance:
         account = await _get_account_or_404(account_id, db)
-        today = date.today()
+        today = await get_app_date(db)
         rd = relativedelta(today, mortgage.start_date)
         months_elapsed = rd.years * 12 + rd.months
         remaining_months = mortgage.term_months - months_elapsed
@@ -122,7 +123,7 @@ async def extra_payment_calc(
     account = await _get_account_or_404(account_id, db)
     mortgage = await _get_mortgage_or_404(account_id, db)
 
-    today = date.today()
+    today = await get_app_date(db)
     rd = relativedelta(today, mortgage.start_date)
     months_elapsed = rd.years * 12 + rd.months
     remaining_months = mortgage.term_months - months_elapsed
