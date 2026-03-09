@@ -69,3 +69,6 @@ class RecurringOut(BaseModel):
 class MarkPaidRequest(BaseModel):
     date: Optional[date] = None
     amount: Optional[Decimal] = None
+    description: Optional[str] = None
+    account_id: Optional[uuid.UUID] = None
+    category_id: Optional[uuid.UUID] = None

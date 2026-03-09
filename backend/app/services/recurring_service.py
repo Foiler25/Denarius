@@ -17,20 +17,24 @@ async def mark_paid(
     created_by: uuid.UUID,
     payment_date: date | None = None,
     amount=None,
+    description: str | None = None,
+    account_id: uuid.UUID | None = None,
+    category_id: uuid.UUID | None = None,
 ) -> Transaction:
     txn_date = payment_date or date.today()
     txn_amount = amount if amount is not None else item.amount
     txn_type = TransactionType.income if item.type.value == "income" else TransactionType.expense
 
     txn = Transaction(
-        account_id=item.account_id,
-        category_id=item.category_id,
+        account_id=account_id or item.account_id,
+        category_id=category_id if category_id is not None else item.category_id,
         recurring_item_id=item.id,
         amount=txn_amount,
         type=txn_type,
-        description=f"{item.name} (recurring)",
+        description=description if description is not None else item.name,
         date=txn_date,
         created_by=created_by,
+        is_cleared=True,
     )
     db.add(txn)
 

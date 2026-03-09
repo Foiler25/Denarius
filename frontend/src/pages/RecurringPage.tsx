@@ -99,39 +99,82 @@ function Spinner() {
   );
 }
 
-const MONTHLY_MULTIPLIER: Record<string, number> = {
-  weekly: 52 / 12,
-  biweekly: 26 / 12,
-  monthly: 1,
-  quarterly: 1 / 3,
-  annually: 1 / 12,
-};
-
 const SUMMARY_LABELS: Record<string, string> = {
   bill: "Bills",
   subscription: "Subscriptions",
   income: "Income",
 };
 
+function countOccurrencesInMonth(nextDueDateStr: string, frequency: string, year: number, month: number): number {
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+
+  if (frequency === "monthly") return 1;
+
+  if (frequency === "quarterly" || frequency === "annually") {
+    const intervalMonths = frequency === "quarterly" ? 3 : 12;
+    let d = new Date(nextDueDateStr + "T12:00:00");
+    while (d > monthEnd) {
+      d = new Date(d.getFullYear(), d.getMonth() - intervalMonths, d.getDate(), 12);
+    }
+    return d >= monthStart ? 1 : 0;
+  }
+
+  // weekly or biweekly — fixed day intervals
+  const intervalMs = (frequency === "weekly" ? 7 : 14) * 86400000;
+  let d = new Date(nextDueDateStr + "T12:00:00");
+  while (d > monthEnd) d = new Date(d.getTime() - intervalMs);
+  let count = 0;
+  while (d >= monthStart) {
+    count++;
+    d = new Date(d.getTime() - intervalMs);
+  }
+  return count;
+}
+
+function countPaidOccurrencesInMonth(item: RecurringItem, year: number, month: number): number {
+  if (!item.last_paid_date) return 0;
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+  const lastPaid = new Date(item.last_paid_date + "T12:00:00");
+  if (lastPaid < monthStart) return 0;
+
+  if (item.frequency === "monthly") return item.is_paid_current_period ? 1 : 0;
+
+  if (item.frequency === "quarterly" || item.frequency === "annually") {
+    const total = countOccurrencesInMonth(item.next_due_date, item.frequency, year, month);
+    return total > 0 && item.is_paid_current_period ? 1 : 0;
+  }
+
+  // weekly or biweekly
+  const intervalMs = (item.frequency === "weekly" ? 7 : 14) * 86400000;
+  let d = new Date(item.next_due_date + "T12:00:00");
+  while (d > monthEnd) d = new Date(d.getTime() - intervalMs);
+  let count = 0;
+  while (d >= monthStart) {
+    if (d <= lastPaid) count++;
+    d = new Date(d.getTime() - intervalMs);
+  }
+  return count;
+}
+
 function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "income" }) {
   const { data: items = [] } = useRecurring(type);
   const activeItems = (items as RecurringItem[]).filter((i) => i.is_active);
 
-  const totalMonthly = activeItems.reduce((sum, i) => {
-    const mult = MONTHLY_MULTIPLIER[i.frequency] ?? 1;
-    return sum + Number(i.amount) * mult;
-  }, 0);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
 
-  const paidItems = activeItems.filter((i) => i.is_paid_current_period);
-  const paidAmount = paidItems.reduce(
-    (sum, i) => sum + Number(i.last_paid_amount ?? i.amount),
-    0
-  );
-  const paidCount = paidItems.length;
-  const paidPct = totalMonthly > 0 ? Math.min(100, (paidAmount / totalMonthly) * 100) : 0;
-  const allPaid = totalMonthly > 0 && paidPct >= 100;
+  const totalOccurrences = activeItems.reduce((sum, i) => sum + countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
+  const totalAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
+  const paidOccurrences = activeItems.reduce((sum, i) => sum + countPaidOccurrencesInMonth(i, year, month), 0);
+  const paidAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countPaidOccurrencesInMonth(i, year, month), 0);
 
-  if (totalMonthly === 0) return null;
+  const paidPct = totalAmount > 0 ? Math.min(100, (paidAmount / totalAmount) * 100) : 0;
+  const allPaid = totalAmount > 0 && paidPct >= 100;
+
+  if (totalAmount === 0) return null;
 
   const actionLabel = type === "income" ? "received" : "paid";
 
@@ -147,7 +190,7 @@ function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "incom
           {formatCurrency(paidAmount)}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {paidCount} of {activeItems.length} {actionLabel} · of ~{formatCurrency(totalMonthly)}/mo
+          {paidOccurrences} of {totalOccurrences} {actionLabel} · of {formatCurrency(totalAmount)}/mo
         </p>
         <div className="mt-2 h-1.5 w-full bg-muted rounded-full">
           <div
@@ -191,6 +234,9 @@ function RecurringTab({
   const [markPaidOpen, setMarkPaidOpen] = useState(false);
   const [paidDate, setPaidDate] = useState(() => todayString(useSettingsStore.getState().timezone));
   const [paidAmount, setPaidAmount] = useState("");
+  const [paidDescription, setPaidDescription] = useState("");
+  const [paidAccountId, setPaidAccountId] = useState("none");
+  const [paidCategoryId, setPaidCategoryId] = useState("none");
 
   const { data: items = [], isLoading, isError } = useRecurring(type, !showInactive);
   const { data: accounts = [] } = useAccounts();
@@ -287,6 +333,9 @@ function RecurringTab({
       id: markPaidId,
       date: paidDate,
       amount: paidAmount ? parseFloat(paidAmount) : undefined,
+      description: paidDescription || undefined,
+      account_id: paidAccountId !== "none" ? paidAccountId : undefined,
+      category_id: paidCategoryId !== "none" ? paidCategoryId : null,
     });
     setMarkPaidOpen(false);
     setMarkPaidId(null);
@@ -334,6 +383,9 @@ function RecurringTab({
                 setMarkPaidId(item.id);
                 setPaidDate(todayString(timezone));
                 setPaidAmount(String(item.amount));
+                setPaidDescription(item.name);
+                setPaidAccountId(item.account_id || "none");
+                setPaidCategoryId(item.category_id || "none");
                 setMarkPaidOpen(true);
               }}
             />
@@ -530,7 +582,7 @@ function RecurringTab({
 
       {/* Mark as Paid Dialog */}
       <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-sm">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
           </DialogHeader>
@@ -548,6 +600,42 @@ function RecurringTab({
                 value={paidAmount}
                 onChange={(e) => setPaidAmount(e.target.value)}
               />
+            </div>
+            <div className="space-y-1">
+              <Label>Description</Label>
+              <Input
+                value={paidDescription}
+                onChange={(e) => setPaidDescription(e.target.value)}
+                placeholder="e.g. Netflix"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Account</Label>
+              <Select value={paidAccountId} onValueChange={setPaidAccountId}>
+                <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                <SelectContent>
+                  {(accounts as Account[])
+                    .filter((a) => a.type === "asset")
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Category</Label>
+              <Select value={paidCategoryId} onValueChange={setPaidCategoryId}>
+                <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Uncategorized</SelectItem>
+                  {(categories as Category[])
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

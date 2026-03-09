@@ -65,8 +65,17 @@ export function useDeleteRecurring() {
 export function useMarkPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, date, amount }: { id: string; date?: string; amount?: number }) =>
-      api.post(`/recurring/${id}/mark-paid`, { date, amount }).then((r) => r.data),
+    mutationFn: ({
+      id, date, amount, description, account_id, category_id,
+    }: {
+      id: string;
+      date?: string;
+      amount?: number;
+      description?: string;
+      account_id?: string;
+      category_id?: string | null;
+    }) =>
+      api.post(`/recurring/${id}/mark-paid`, { date, amount, description, account_id, category_id }).then((r) => r.data),
     onSuccess: (updatedItem) => {
       patchRecurringItem(qc, updatedItem);
       qc.invalidateQueries({ queryKey: ["recurring"] });

@@ -152,7 +152,7 @@ async def mark_paid_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     item = await _get_or_404(item_id, db)
-    await mark_paid(item, db, current_user.id, data.date, data.amount)
+    await mark_paid(item, db, current_user.id, data.date, data.amount, data.description, data.account_id, data.category_id)
     await db.refresh(item)
     return _with_days_until_due(item, await get_app_date(db))
 
