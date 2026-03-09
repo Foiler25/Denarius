@@ -196,17 +196,18 @@ async def record_mortgage_payment(
     source_account.current_balance -= data.source_amount
 
     # Create mortgage transaction (principal/extra reduction on mortgage account)
+    # Income type because the payment reduces the debt (makes negative balance less negative).
     mortgage_txn = Transaction(
         account_id=account_id,
         category_id=category_id,
         amount=data.mortgage_amount,
-        type=TransactionType.expense,
+        type=TransactionType.income,
         description=desc_mortgage,
         date=data.date,
         created_by=current_user.id,
     )
     db.add(mortgage_txn)
-    mortgage_account.current_balance -= data.mortgage_amount
+    mortgage_account.current_balance += data.mortgage_amount
 
     # Flush to get IDs, then link them
     await db.flush()

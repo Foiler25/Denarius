@@ -97,6 +97,7 @@ const LOAN_TYPES = [
 ];
 
 const MORTGAGE_TYPES = ["mortgage", "loan"];
+const LIABILITY_TYPES = ["credit_card", "loan", "mortgage"];
 const ACCOUNT_TYPES = [
   "checking",
   "savings",
@@ -149,7 +150,9 @@ export default function AccountsPage() {
     setForm({
       name: account.name,
       type: account.type,
-      balance: String(account.current_balance),
+      balance: LIABILITY_TYPES.includes(account.type)
+        ? String(Math.abs(Number(account.current_balance)))
+        : String(account.current_balance),
       institution: account.institution ?? "",
       account_number: account.account_number ?? "",
       notes: account.notes ?? "",
@@ -208,7 +211,9 @@ export default function AccountsPage() {
     const payload: Record<string, unknown> = {
       name: form.name,
       type: form.type,
-      current_balance: parseFloat(form.balance),
+      current_balance: LIABILITY_TYPES.includes(form.type)
+        ? -Math.abs(parseFloat(form.balance))
+        : parseFloat(form.balance),
       institution: form.institution || undefined,
       account_number: form.account_number || undefined,
       notes: form.notes || undefined,
@@ -446,6 +451,11 @@ export default function AccountsPage() {
                     onChange={(e) => setForm({ ...form, balance: e.target.value })}
                     required
                   />
+                  {LIABILITY_TYPES.includes(form.type) && (
+                    <p className="text-xs text-muted-foreground">
+                      Enter the amount owed as a positive number — it will be stored as a negative balance.
+                    </p>
+                  )}
                 </div>
                 {form.type !== 'property' && (
                   <>
