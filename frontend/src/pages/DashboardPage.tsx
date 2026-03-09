@@ -582,6 +582,7 @@ export default function DashboardPage() {
       current_month_income: number;
       prev_month: number;
       budget_total: number;
+      non_bill_spending: number;
     };
     upcoming_bills: Array<{
       id: string;
@@ -608,13 +609,17 @@ export default function DashboardPage() {
     }>;
   };
 
+  const nonBillSpending = dashboard.monthly_spending.non_bill_spending;
   const spendingPct =
     dashboard.monthly_spending.budget_total > 0
-      ? Math.min(100, (dashboard.monthly_spending.current_month / dashboard.monthly_spending.budget_total) * 100)
+      ? (nonBillSpending / dashboard.monthly_spending.budget_total) * 100
       : 0;
   const overBudget =
-    dashboard.monthly_spending.current_month > dashboard.monthly_spending.budget_total &&
+    nonBillSpending > dashboard.monthly_spending.budget_total &&
     dashboard.monthly_spending.budget_total > 0;
+  const overflowPct = overBudget
+    ? Math.min(30, ((nonBillSpending - dashboard.monthly_spending.budget_total) / dashboard.monthly_spending.budget_total) * 100)
+    : 0;
 
   const cashFlow = dashboard.monthly_spending.current_month_income - dashboard.monthly_spending.current_month;
 
@@ -788,21 +793,31 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className={cn("text-2xl font-bold", overBudget ? "text-destructive" : "text-foreground")}>
-              {formatCurrency(dashboard.monthly_spending.current_month)}
+              {formatCurrency(nonBillSpending)}
             </div>
             {dashboard.monthly_spending.budget_total > 0 ? (
               <>
                 <p className="text-xs text-muted-foreground mt-1">
                   of {formatCurrency(dashboard.monthly_spending.budget_total)} budgeted
                 </p>
-                <div className="mt-2 h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="mt-2 h-1.5 w-full bg-muted rounded-full relative overflow-visible">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      overBudget ? "bg-destructive" : "bg-emerald-500"
-                    )}
-                    style={{ width: `${spendingPct}%` }}
+                    className="absolute top-0 left-0 h-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.min(100, spendingPct)}%`,
+                      borderRadius: overBudget ? '9999px 0 0 9999px' : '9999px',
+                    }}
                   />
+                  {overBudget && (
+                    <div
+                      className="absolute top-0 h-full bg-destructive transition-all"
+                      style={{
+                        left: '100%',
+                        width: `${overflowPct}%`,
+                        borderRadius: '0 9999px 9999px 0',
+                      }}
+                    />
+                  )}
                 </div>
               </>
             ) : (

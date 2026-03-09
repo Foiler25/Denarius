@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_current_user, get_db
 from app.models.account import Account, AccountType
+from app.models.monthly_budget_total import MonthlyBudgetTotal
 from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -57,6 +58,20 @@ async def dashboard_summary(
     )
     current_spending = curr_spending_result.scalar() or Decimal("0")
 
+    non_bill_result = await db.execute(
+        select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
+        .where(
+            Transaction.type == TransactionType.expense,
+            Transaction.date >= current_month_start,
+            Transaction.date < next_month_start,
+            Transaction.deleted_at == None,
+            Transaction.recurring_item_id == None,
+            Account.type.not_in(_liability_types),
+        )
+    )
+    non_bill_spending = non_bill_result.scalar() or Decimal("0")
+
     curr_income_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
         .join(Account, Transaction.account_id == Account.id)
@@ -88,9 +103,16 @@ async def dashboard_summary(
     )
     prev_spending = prev_result.scalar() or Decimal("0")
 
-    # Budget total for current month
+    # Budget total for current month — prefer MonthlyBudgetTotal, fall back to category sum
     budget_items = await _budgets_with_spent(today, db)
-    budget_total = sum(b.amount for b in budget_items)
+    monthly_target_result = await db.execute(
+        select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == current_month_start)
+    )
+    monthly_target = monthly_target_result.scalar_one_or_none()
+    if monthly_target is not None:
+        budget_total = monthly_target.amount
+    else:
+        budget_total = sum(b.amount for b in budget_items)
     over_budget = [b for b in budget_items if b.is_over_budget]
 
     # Upcoming bills (next 7 days)
@@ -125,6 +147,7 @@ async def dashboard_summary(
             current_month_income=current_income,
             prev_month=prev_spending,
             budget_total=budget_total,
+            non_bill_spending=non_bill_spending,
         ),
         upcoming_bills=upcoming_bills,
         recent_transactions=recent_transactions,

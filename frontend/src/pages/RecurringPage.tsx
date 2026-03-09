@@ -99,6 +99,46 @@ function Spinner() {
   );
 }
 
+function RecurringSummaryCard({
+  items,
+  type,
+}: {
+  items: RecurringItem[];
+  type: "subscription" | "bill" | "income";
+}) {
+  const activeItems = items.filter((i) => i.is_active);
+  const totalAmount = activeItems.reduce((sum, i) => sum + i.amount, 0);
+  const paidItems = activeItems.filter((i) => i.is_paid_current_period);
+  const paidAmount = paidItems.reduce((sum, i) => sum + (i.last_paid_amount ?? i.amount), 0);
+  const paidCount = paidItems.length;
+  const paidPct = totalAmount > 0 ? Math.min(100, (paidAmount / totalAmount) * 100) : 0;
+  const allPaid = paidPct >= 100;
+
+  if (totalAmount === 0) return null;
+
+  const actionLabel = type === "income" ? "received" : "paid";
+
+  return (
+    <Card className="py-2 px-3 min-w-[180px]">
+      <CardContent className="p-0 space-y-1">
+        <p className="text-xs text-muted-foreground">
+          {paidCount} of {activeItems.length} {actionLabel}
+        </p>
+        <div className={cn("text-lg font-bold leading-tight", allPaid ? "text-emerald-500" : "text-foreground")}>
+          {formatCurrency(paidAmount)}
+        </div>
+        <p className="text-xs text-muted-foreground">of {formatCurrency(totalAmount)}</p>
+        <div className="h-1.5 w-full bg-muted rounded-full">
+          <div
+            className="h-full bg-emerald-500 transition-all rounded-full"
+            style={{ width: `${paidPct}%` }}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function dueBadgeClass(days: number) {
   if (days < 0) return "border-destructive bg-destructive/10 text-destructive";
   if (days <= 7) return "border-yellow-500 bg-yellow-50 text-yellow-700";
@@ -233,8 +273,8 @@ function RecurringTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-2 pt-1">
           <span className="text-sm text-muted-foreground">{recurringList.length} {label.toLowerCase()}</span>
           <Button
             variant="ghost"
@@ -245,10 +285,13 @@ function RecurringTab({
             {showInactive ? "Show Active Only" : "Show Inactive"}
           </Button>
         </div>
-        <Button size="sm" onClick={openAdd} className="flex items-center gap-1">
-          <Plus className="h-4 w-4" />
-          Add {label.endsWith("s") ? label.slice(0, -1) : label}
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          <RecurringSummaryCard items={recurringList} type={type} />
+          <Button size="sm" onClick={openAdd} className="flex items-center gap-1">
+            <Plus className="h-4 w-4" />
+            Add {label.endsWith("s") ? label.slice(0, -1) : label}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

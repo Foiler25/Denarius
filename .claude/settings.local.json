@@ -18,7 +18,7 @@
       "Bash(docker compose build frontend)",
       "Bash(docker compose up -d frontend)",
       "Bash(curl -s http://localhost:9723/api/v1/system/health)",
-"Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
+      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
       "Bash(npx tsc --noEmit)",
       "Bash(docker compose exec db psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
       "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
@@ -46,7 +46,9 @@
       "Bash(qlmanage -t -s 512 -o /tmp/ /Users/loofa/Documents/Denarius/frontend/public/favicon.svg)",
       "Read(//private/tmp/**)",
       "Read(//Users/loofa/.claude/**)",
-      "Read(//Users/loofa/.config/claude/**)"
+      "Read(//Users/loofa/.config/claude/**)",
+      "mcp__pharaoh__get_codebase_map",
+      "mcp__pharaoh__request_upload"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -11,6 +11,7 @@ class MonthlySpendingSummary(BaseModel):
     prev_month: Decimal
     budget_total: Decimal
     current_month_income: Decimal
+    non_bill_spending: Decimal
 
 
 class DashboardSummary(BaseModel):
