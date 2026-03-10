@@ -11,8 +11,8 @@ from app.models.category import Category
 from app.models.recurring_item import RecurringItem, RecurringType
 from app.models.user import User
 from app.routers.system import get_app_date
-from app.schemas.recurring_item import MarkPaidRequest, RecurringCreate, RecurringOut, RecurringUpdate
-from app.services.recurring_service import mark_paid, match_unlinked_current_month
+from app.schemas.recurring_item import MarkPaidNoTransactionRequest, MarkPaidRequest, RecurringCreate, RecurringOut, RecurringUpdate
+from app.services.recurring_service import mark_paid, mark_paid_no_transaction, match_unlinked_current_month
 from app.utils.date_utils import rewind_by_frequency
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
@@ -153,6 +153,19 @@ async def mark_paid_endpoint(
 ):
     item = await _get_or_404(item_id, db)
     await mark_paid(item, db, current_user.id, data.date, data.amount, data.description, data.account_id, data.category_id, data.source_account_id)
+    await db.refresh(item)
+    return _with_days_until_due(item, await get_app_date(db))
+
+
+@router.post("/{item_id}/mark-paid-no-transaction", response_model=RecurringOut, status_code=200)
+async def mark_paid_no_transaction_endpoint(
+    item_id: uuid.UUID,
+    data: MarkPaidNoTransactionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = await _get_or_404(item_id, db)
+    await mark_paid_no_transaction(item, db, data.date, data.amount)
     await db.refresh(item)
     return _with_days_until_due(item, await get_app_date(db))
 

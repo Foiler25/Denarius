@@ -12,6 +12,7 @@ from app.dependencies import get_current_user, get_db
 from app.models.account import Account
 from app.models.category import Category
 from app.models.mortgage_detail import MortgageDetail
+from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.routers.system import get_app_date
@@ -26,6 +27,7 @@ from app.schemas.mortgage import (
     MortgageUpdate,
 )
 from app.services.mortgage_service import build_amortization_schedule, calculate_extra_payment_savings
+from app.utils.date_utils import advance_by_frequency, rewind_by_frequency
 
 router = APIRouter(prefix="/accounts", tags=["mortgage"])
 
@@ -197,6 +199,7 @@ async def record_mortgage_payment(
 
     # Create mortgage transaction (principal/extra reduction on mortgage account)
     # Income type because the payment reduces the debt (makes negative balance less negative).
+    # is_hidden=True so it doesn't appear in the transactions list; balance is still updated.
     mortgage_txn = Transaction(
         account_id=account_id,
         category_id=category_id,
@@ -205,6 +208,7 @@ async def record_mortgage_payment(
         description=desc_mortgage,
         date=data.date,
         created_by=current_user.id,
+        is_hidden=True,
     )
     db.add(mortgage_txn)
     mortgage_account.current_balance += data.mortgage_amount
@@ -215,6 +219,29 @@ async def record_mortgage_payment(
     mortgage_txn.paired_transaction_id = source_txn.id
 
     await db.commit()
+
+    # Auto-link the corresponding recurring item for this mortgage account (if any)
+    ri_result = await db.execute(
+        select(RecurringItem)
+        .where(
+            RecurringItem.account_id == account_id,
+            RecurringItem.is_active == True,
+            RecurringItem.deleted_at == None,
+        )
+        .order_by(RecurringItem.next_due_date)
+    )
+    for item in ri_result.scalars().all():
+        period_start = rewind_by_frequency(item.next_due_date, item.frequency)
+        already_paid = item.last_paid_date is not None and item.last_paid_date >= period_start
+        if not already_paid:
+            source_txn.recurring_item_id = item.id
+            item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
+            item.last_paid_date = data.date
+            item.last_paid_amount = data.source_amount
+            item.last_paid_transaction_id = source_txn.id
+            await db.commit()
+            break
+
     return MortgagePaymentResult(
         source_transaction_id=source_txn.id,
         mortgage_transaction_id=mortgage_txn.id,

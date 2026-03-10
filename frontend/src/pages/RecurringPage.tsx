@@ -28,6 +28,7 @@ import {
   useUpdateRecurring,
   useDeleteRecurring,
   useMarkPaid,
+  useMarkPaidNoTransaction,
 } from "@/api/recurring";
 import { useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
@@ -245,6 +246,7 @@ function RecurringTab({
   const [paidCategoryId, setPaidCategoryId] = useState("none");
   const [paidSourceAccountId, setPaidSourceAccountId] = useState("none");
   const [paidError, setPaidError] = useState<string | null>(null);
+  const [confirmNoTxn, setConfirmNoTxn] = useState(false);
 
   const { data: items = [], isLoading, isError } = useRecurring(type, !showInactive);
   const { data: accounts = [] } = useAccounts();
@@ -253,6 +255,7 @@ function RecurringTab({
   const createRecurring = useCreateRecurring();
   const deleteRecurring = useDeleteRecurring();
   const markPaid = useMarkPaid();
+  const markPaidNoTxn = useMarkPaidNoTransaction();
 
   const recurringList: RecurringItem[] = Array.isArray(items) ? items : [];
 
@@ -335,10 +338,30 @@ function RecurringTab({
     setDeleteId(null);
   }
 
+  async function handleMarkPaidNoTransaction() {
+    if (!markPaidId) return;
+    try {
+      await markPaidNoTxn.mutateAsync({
+        id: markPaidId,
+        date: paidDate,
+        amount: paidAmount ? parseFloat(paidAmount) : undefined,
+      });
+      setMarkPaidOpen(false);
+      setMarkPaidId(null);
+      setConfirmNoTxn(false);
+    } catch {
+      setPaidError("Failed to mark as paid. Please try again.");
+    }
+  }
+
   async function handleMarkPaid() {
     if (!markPaidId) return;
     setPaidError(null);
     const isMortgage = (accounts as Account[]).find((a) => a.id === paidAccountId)?.type === "mortgage";
+    if (isMortgage && paidSourceAccountId === "none") {
+      setPaidError("Please select a source account for mortgage payments.");
+      return;
+    }
     try {
       await markPaid.mutateAsync({
         id: markPaidId,
@@ -401,7 +424,11 @@ function RecurringTab({
                 setPaidDescription(item.name);
                 setPaidAccountId(item.account_id || "none");
                 setPaidCategoryId(item.category_id || "none");
-                setPaidSourceAccountId("none");
+                const isMtg = (accounts as Account[]).find((a) => a.id === item.account_id)?.type === "mortgage";
+                const firstPayable = isMtg
+                  ? (accounts as Account[]).find((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
+                  : undefined;
+                setPaidSourceAccountId(firstPayable?.id ?? "none");
                 setPaidError(null);
                 setMarkPaidOpen(true);
               }}
@@ -545,15 +572,15 @@ function RecurringTab({
                 {form.auto_match && (
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">
-                      Keywords (comma-separated, matched against transaction description)
+                      Keywords (comma-separated; supports * and ? wildcards)
                     </Label>
                     <Input
-                      placeholder="e.g. Netflix, NETFLIX"
+                      placeholder="e.g. Netflix, AMZN*, *PRIME*"
                       value={form.keyword_match}
                       onChange={(e) => setForm({ ...form, keyword_match: e.target.value })}
                     />
                     <p className="text-xs text-muted-foreground">
-                      New transactions whose description contains a keyword and amount falls within the configured range will be auto-linked and marked paid.
+                      New transactions whose description matches a keyword and amount falls within the configured range will be auto-linked and marked paid. Plain keywords match anywhere in the description. Use * (any characters) or ? (one character) for wildcard matching — e.g. <span className="font-mono">AMZN*</span> matches descriptions starting with "AMZN", <span className="font-mono">*PRIME*</span> matches any description containing "PRIME".
                     </p>
                   </div>
                 )}
@@ -598,7 +625,7 @@ function RecurringTab({
       </Dialog>
 
       {/* Mark as Paid Dialog */}
-      <Dialog open={markPaidOpen} onOpenChange={setMarkPaidOpen}>
+      <Dialog open={markPaidOpen} onOpenChange={(open) => { setMarkPaidOpen(open); if (!open) setConfirmNoTxn(false); }}>
         <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
@@ -690,13 +717,30 @@ function RecurringTab({
               </div>
             );
           })()}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleMarkPaid} disabled={markPaid.isPending}>
-              {markPaid.isPending ? "Saving…" : "Mark Paid"}
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <div className="flex justify-end gap-2">
+              <DialogClose asChild>
+                <Button variant="outline">Cancel</Button>
+              </DialogClose>
+              <Button onClick={handleMarkPaid} disabled={markPaid.isPending}>
+                {markPaid.isPending ? "Saving…" : "Mark Paid"}
+              </Button>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1 border-t">
+              {confirmNoTxn ? (
+                <>
+                  <span className="text-xs text-muted-foreground">No transaction will be created.</span>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirmNoTxn(false)}>Cancel</Button>
+                  <Button size="sm" onClick={handleMarkPaidNoTransaction} disabled={markPaidNoTxn.isPending}>
+                    {markPaidNoTxn.isPending ? "Saving…" : "Confirm"}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" size="sm" className="text-muted-foreground" onClick={() => setConfirmNoTxn(true)}>
+                  Mark Paid Without Transaction
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

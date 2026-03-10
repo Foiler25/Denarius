@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import date as Date
 from decimal import Decimal
 from typing import Optional
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ class RecurringCreate(BaseModel):
     type: RecurringType
     frequency: RecurringFrequency
     day_of_month: Optional[int] = None
-    next_due_date: date
+    next_due_date: Date
     auto_post: bool = False
     auto_match: bool = False
     keyword_match: Optional[str] = None
@@ -32,7 +32,7 @@ class RecurringUpdate(BaseModel):
     amount_max: Optional[Decimal] = None
     frequency: Optional[RecurringFrequency] = None
     day_of_month: Optional[int] = None
-    next_due_date: Optional[date] = None
+    next_due_date: Optional[Date] = None
     auto_post: Optional[bool] = None
     auto_match: Optional[bool] = None
     keyword_match: Optional[str] = None
@@ -53,23 +53,28 @@ class RecurringOut(BaseModel):
     type: RecurringType
     frequency: RecurringFrequency
     day_of_month: Optional[int]
-    next_due_date: date
+    next_due_date: Date
     auto_post: bool
     auto_match: bool
     keyword_match: Optional[str] = None
     is_active: bool
     notes: Optional[str]
     days_until_due: Optional[int] = None
-    last_paid_date: Optional[date] = None
+    last_paid_date: Optional[Date] = None
     last_paid_amount: Optional[Decimal] = None
     last_paid_transaction_id: Optional[uuid.UUID] = None
     is_paid_current_period: bool = False
 
 
 class MarkPaidRequest(BaseModel):
-    date: Optional[date] = None
+    date: Optional[Date] = None
     amount: Optional[Decimal] = None
     description: Optional[str] = None
     account_id: Optional[uuid.UUID] = None
     category_id: Optional[uuid.UUID] = None
     source_account_id: Optional[uuid.UUID] = None
+
+
+class MarkPaidNoTransactionRequest(BaseModel):
+    date: Optional[Date] = None
+    amount: Optional[Decimal] = None

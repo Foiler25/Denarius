@@ -78,7 +78,7 @@ async def list_transactions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Transaction).options(selectinload(Transaction.category), selectinload(Transaction.recurring_item), selectinload(Transaction.account), selectinload(Transaction.expense_account)).where(Transaction.deleted_at == None)
+    q = select(Transaction).options(selectinload(Transaction.category), selectinload(Transaction.recurring_item), selectinload(Transaction.account), selectinload(Transaction.expense_account)).where(Transaction.deleted_at == None, Transaction.is_hidden != True)
     if account_id:
         q = q.where(Transaction.account_id == account_id)
     if category_id:
@@ -181,7 +181,7 @@ async def export_transactions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    q = select(Transaction).options(selectinload(Transaction.category)).where(Transaction.deleted_at == None)
+    q = select(Transaction).options(selectinload(Transaction.category)).where(Transaction.deleted_at == None, Transaction.is_hidden != True)
     if account_id:
         q = q.where(Transaction.account_id == account_id)
     if category_id:

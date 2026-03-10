@@ -1,3 +1,4 @@
+import fnmatch
 import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -136,6 +137,22 @@ async def mark_paid(
     return txn
 
 
+async def mark_paid_no_transaction(
+    item: RecurringItem,
+    db: AsyncSession,
+    payment_date: date | None = None,
+    amount=None,
+) -> None:
+    txn_date = payment_date or date.today()
+    txn_amount = amount if amount is not None else item.amount
+
+    item.last_paid_date = txn_date
+    item.last_paid_amount = txn_amount
+    item.last_paid_transaction_id = None
+    item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
+    await db.commit()
+
+
 async def auto_post_due_items(db: AsyncSession) -> int:
     today = date.today()
     result = await db.execute(
@@ -183,10 +200,23 @@ def _amount_in_range(txn_amount: Decimal, item: RecurringItem) -> bool:
 
 
 def _keywords_match(description: str | None, keyword_match: str) -> bool:
-    """Return True if any comma-separated keyword appears in description (case-insensitive)."""
+    """Return True if any comma-separated keyword matches the description (case-insensitive).
+
+    Plain keywords match as substrings anywhere in the description.
+    Keywords containing * or ? are treated as glob patterns matched against the full description.
+    Examples: "Netflix" matches "NETFLIX SUBSCRIPTION"; "AMZN*" matches "AMZN MARKETPLACE 123";
+    "*PRIME*" matches "AMAZON PRIME VIDEO".
+    """
     desc = (description or "").lower()
     keywords = [k.strip().lower() for k in keyword_match.split(",") if k.strip()]
-    return any(k in desc for k in keywords)
+    for k in keywords:
+        if "*" in k or "?" in k:
+            if fnmatch.fnmatch(desc, k):
+                return True
+        else:
+            if k in desc:
+                return True
+    return False
 
 
 def _attach_to_item(txn: Transaction, item: RecurringItem) -> None:

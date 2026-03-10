@@ -48,7 +48,18 @@
       "Read(//Users/loofa/.claude/**)",
       "Read(//Users/loofa/.config/claude/**)",
       "mcp__pharaoh__get_codebase_map",
-      "mcp__pharaoh__request_upload"
+      "mcp__pharaoh__request_upload",
+      "Bash(docker compose logs backend --tail=5)",
+      "Bash(docker compose logs backend --since 5m)",
+      "Bash(docker compose logs backend --since 2m)",
+      "Bash(docker compose logs backend --since 3m)",
+      "Bash(docker compose logs backend --since 10m)",
+      "Bash(curl -s http://localhost:9723/api/docs/openapi.json)",
+      "Bash(python3 -c \"import json,sys; spec=json.load\\(sys.stdin\\); mp=spec.get\\(''components'',{}\\).get\\(''schemas'',{}\\).get\\(''MarkPaidRequest'',{}\\); print\\(json.dumps\\(mp, indent=2\\)\\)\")",
+      "Bash(python3 -c \" import json,sys spec=json.load\\(sys.stdin\\) schemas=spec.get\\(''components'',{}\\).get\\(''schemas'',{}\\) for k in schemas: if ''Paid'' in k or ''paid'' in k or ''Mark'' in k or ''mark'' in k or ''Recurring'' in k: print\\(k, '':'', json.dumps\\(schemas[k].get\\(''properties'',{}\\), indent=2\\)\\) \")",
+      "Bash(curl -sv http://localhost:9723/api/v1/recurring/2b58e9af-ccdb-47fd-9222-f18e675e403d/mark-paid -X POST -H \"Content-Type: application/json\" -d '{\"\"date\"\":\"\"2026-03-09\"\",\"\"amount\"\":100}')",
+      "Bash(docker compose logs backend --since 15m)",
+      "Bash(docker compose exec backend python3 -c \":*)"
     ]
   },
   "enableAllProjectMcpServers": true,

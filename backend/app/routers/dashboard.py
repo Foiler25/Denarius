@@ -128,7 +128,7 @@ async def dashboard_summary(
         .limit(10)
     )
     from app.routers.recurring import _with_days_until_due
-    upcoming_bills = [_with_days_until_due(item) for item in upcoming_result.scalars().all()]
+    upcoming_bills = [_with_days_until_due(item, today) for item in upcoming_result.scalars().all()]
 
     # Recent transactions
     recent_result = await db.execute(

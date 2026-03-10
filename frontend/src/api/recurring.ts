@@ -87,3 +87,15 @@ export function useMarkPaid() {
     },
   });
 }
+
+export function useMarkPaidNoTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, date, amount }: { id: string; date?: string; amount?: number }) =>
+      api.post(`/recurring/${id}/mark-paid-no-transaction`, { date, amount }).then((r) => r.data),
+    onSuccess: (updatedItem) => {
+      patchRecurringItem(qc, updatedItem);
+      qc.invalidateQueries({ queryKey: ["recurring"] });
+    },
+  });
+}

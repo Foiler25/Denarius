@@ -84,6 +84,7 @@ export function useRecordMortgagePayment(accountId: string) {
       qc.invalidateQueries({ queryKey: ["mortgage", accountId, "amortization", "remaining"] });
       qc.invalidateQueries({ queryKey: ["networth"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["recurring"] });
     },
   });
 }
