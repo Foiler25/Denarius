@@ -243,6 +243,8 @@ function RecurringTab({
   const [paidDescription, setPaidDescription] = useState("");
   const [paidAccountId, setPaidAccountId] = useState("none");
   const [paidCategoryId, setPaidCategoryId] = useState("none");
+  const [paidSourceAccountId, setPaidSourceAccountId] = useState("none");
+  const [paidError, setPaidError] = useState<string | null>(null);
 
   const { data: items = [], isLoading, isError } = useRecurring(type, !showInactive);
   const { data: accounts = [] } = useAccounts();
@@ -335,16 +337,23 @@ function RecurringTab({
 
   async function handleMarkPaid() {
     if (!markPaidId) return;
-    await markPaid.mutateAsync({
-      id: markPaidId,
-      date: paidDate,
-      amount: paidAmount ? parseFloat(paidAmount) : undefined,
-      description: paidDescription || undefined,
-      account_id: paidAccountId !== "none" ? paidAccountId : undefined,
-      category_id: paidCategoryId !== "none" ? paidCategoryId : null,
-    });
-    setMarkPaidOpen(false);
-    setMarkPaidId(null);
+    setPaidError(null);
+    const isMortgage = (accounts as Account[]).find((a) => a.id === paidAccountId)?.type === "mortgage";
+    try {
+      await markPaid.mutateAsync({
+        id: markPaidId,
+        date: paidDate,
+        amount: paidAmount ? parseFloat(paidAmount) : undefined,
+        description: paidDescription || undefined,
+        account_id: paidAccountId !== "none" ? paidAccountId : undefined,
+        category_id: paidCategoryId !== "none" ? paidCategoryId : null,
+        source_account_id: isMortgage && paidSourceAccountId !== "none" ? paidSourceAccountId : undefined,
+      });
+      setMarkPaidOpen(false);
+      setMarkPaidId(null);
+    } catch {
+      setPaidError("Failed to record payment. Please try again.");
+    }
   }
 
   return (
@@ -392,6 +401,8 @@ function RecurringTab({
                 setPaidDescription(item.name);
                 setPaidAccountId(item.account_id || "none");
                 setPaidCategoryId(item.category_id || "none");
+                setPaidSourceAccountId("none");
+                setPaidError(null);
                 setMarkPaidOpen(true);
               }}
             />
@@ -592,58 +603,93 @@ function RecurringTab({
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Payment Date</Label>
-              <Input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Amount Paid ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Description</Label>
-              <Input
-                value={paidDescription}
-                onChange={(e) => setPaidDescription(e.target.value)}
-                placeholder="e.g. Netflix"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Account</Label>
-              <Select value={paidAccountId} onValueChange={setPaidAccountId}>
-                <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                <SelectContent>
-                  {(accounts as Account[])
-                    .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
-                    .map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Category</Label>
-              <Select value={paidCategoryId} onValueChange={setPaidCategoryId}>
-                <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Uncategorized</SelectItem>
-                  {(categories as Category[])
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          {(() => {
+            const isMortgage = (accounts as Account[]).find((a) => a.id === paidAccountId)?.type === "mortgage";
+            const mortgageName = isMortgage ? (accounts as Account[]).find((a) => a.id === paidAccountId)?.name : null;
+            return (
+              <div className="space-y-4 py-2">
+                {paidError && (
+                  <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                    {paidError}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Payment Date</Label>
+                  <Input type="date" value={paidDate} onChange={(e) => setPaidDate(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Amount Paid ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Description</Label>
+                  <Input
+                    value={paidDescription}
+                    onChange={(e) => setPaidDescription(e.target.value)}
+                    placeholder="e.g. Netflix"
+                  />
+                </div>
+                {isMortgage ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Mortgage Account</Label>
+                      <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                        {mortgageName}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Pay From Account</Label>
+                      <Select value={paidSourceAccountId} onValueChange={setPaidSourceAccountId}>
+                        <SelectTrigger><SelectValue placeholder="Select source account" /></SelectTrigger>
+                        <SelectContent>
+                          {(accounts as Account[])
+                            .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
+                            .map((a) => (
+                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : (
+                  <div className="space-y-1">
+                    <Label>Account</Label>
+                    <Select value={paidAccountId} onValueChange={setPaidAccountId}>
+                      <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                      <SelectContent>
+                        {(accounts as Account[])
+                          .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
+                          .map((a) => (
+                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Select value={paidCategoryId} onValueChange={setPaidCategoryId}>
+                    <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Uncategorized</SelectItem>
+                      {(categories as Category[])
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            );
+          })()}
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">Cancel</Button>

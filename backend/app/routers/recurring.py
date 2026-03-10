@@ -22,7 +22,7 @@ def _with_days_until_due(item: RecurringItem, today: date) -> RecurringOut:
     days = (item.next_due_date - today).days
     out = RecurringOut.model_validate(item)
     out.days_until_due = days
-    if item.last_paid_date is not None:
+    if item.last_paid_date is not None and item.next_due_date > today:
         period_start = rewind_by_frequency(item.next_due_date, item.frequency)
         out.is_paid_current_period = item.last_paid_date >= period_start
     return out
@@ -152,7 +152,7 @@ async def mark_paid_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     item = await _get_or_404(item_id, db)
-    await mark_paid(item, db, current_user.id, data.date, data.amount, data.description, data.account_id, data.category_id)
+    await mark_paid(item, db, current_user.id, data.date, data.amount, data.description, data.account_id, data.category_id, data.source_account_id)
     await db.refresh(item)
     return _with_days_until_due(item, await get_app_date(db))
 

@@ -2,10 +2,12 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.account import Account, AccountType
 from app.models.category import Category
+from app.models.mortgage_detail import MortgageDetail
 from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.utils.date_utils import advance_by_frequency, rewind_by_frequency
@@ -20,13 +22,92 @@ async def mark_paid(
     description: str | None = None,
     account_id: uuid.UUID | None = None,
     category_id: uuid.UUID | None = None,
+    source_account_id: uuid.UUID | None = None,
 ) -> Transaction:
     txn_date = payment_date or date.today()
     txn_amount = amount if amount is not None else item.amount
+    resolved_account_id = account_id or item.account_id
+
+    account = await db.get(Account, resolved_account_id)
+
+    # Mortgage payment: create two paired transactions (mirrors record_mortgage_payment)
+    if account and account.type == AccountType.mortgage and source_account_id:
+        src_account = await db.get(Account, source_account_id)
+
+        # Calculate principal/interest split from mortgage details
+        mtg_result = await db.execute(
+            select(MortgageDetail).where(MortgageDetail.account_id == account.id)
+        )
+        mortgage = mtg_result.scalar_one_or_none()
+        if mortgage and account.current_balance != 0:
+            monthly_rate = mortgage.interest_rate / 100 / 12
+            monthly_interest = abs(account.current_balance) * monthly_rate
+            principal = max(txn_amount - monthly_interest, Decimal("0.01"))
+        else:
+            principal = txn_amount
+
+        # Auto-find mortgage/loan category (fallback to item category)
+        cat_result = await db.execute(
+            select(Category).where(
+                Category.deleted_at == None,
+                or_(
+                    func.lower(Category.name).contains("mortgage"),
+                    func.lower(Category.name).contains("loan"),
+                ),
+            ).limit(1)
+        )
+        mtg_category = cat_result.scalar_one_or_none()
+        mtg_category_id = mtg_category.id if mtg_category else (category_id if category_id is not None else item.category_id)
+
+        desc = description if description is not None else item.name
+
+        src_txn = Transaction(
+            account_id=source_account_id,
+            category_id=mtg_category_id,
+            recurring_item_id=item.id,
+            amount=txn_amount,
+            type=TransactionType.expense,
+            description=desc,
+            date=txn_date,
+            created_by=created_by,
+        )
+        mtg_txn = Transaction(
+            account_id=account.id,
+            category_id=mtg_category_id,
+            amount=principal,
+            type=TransactionType.income,
+            description=desc + " — principal",
+            date=txn_date,
+            created_by=created_by,
+        )
+        db.add(src_txn)
+        db.add(mtg_txn)
+
+        if src_account:
+            src_account.current_balance -= txn_amount
+        account.current_balance += principal
+
+        item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
+        await db.flush()
+
+        src_txn.paired_transaction_id = mtg_txn.id
+        mtg_txn.paired_transaction_id = src_txn.id
+
+        await db.commit()
+        await db.refresh(src_txn)
+
+        item.last_paid_date = txn_date
+        item.last_paid_amount = txn_amount
+        item.last_paid_transaction_id = src_txn.id
+        await db.commit()
+
+        return src_txn
+
+    # Normal bill/subscription/income: single transaction
     txn_type = TransactionType.income if item.type.value == "income" else TransactionType.expense
 
     txn = Transaction(
-        account_id=account_id or item.account_id,
+        account_id=resolved_account_id,
         category_id=category_id if category_id is not None else item.category_id,
         recurring_item_id=item.id,
         amount=txn_amount,
@@ -36,6 +117,12 @@ async def mark_paid(
         created_by=created_by,
     )
     db.add(txn)
+
+    if account:
+        if txn_type == TransactionType.expense:
+            account.current_balance -= txn_amount
+        else:
+            account.current_balance += txn_amount
 
     item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
     await db.commit()

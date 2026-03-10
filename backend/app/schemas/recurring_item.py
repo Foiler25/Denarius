@@ -72,3 +72,4 @@ class MarkPaidRequest(BaseModel):
     description: Optional[str] = None
     account_id: Optional[uuid.UUID] = None
     category_id: Optional[uuid.UUID] = None
+    source_account_id: Optional[uuid.UUID] = None

@@ -66,7 +66,7 @@ export function useMarkPaid() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
-      id, date, amount, description, account_id, category_id,
+      id, date, amount, description, account_id, category_id, source_account_id,
     }: {
       id: string;
       date?: string;
@@ -74,13 +74,16 @@ export function useMarkPaid() {
       description?: string;
       account_id?: string;
       category_id?: string | null;
+      source_account_id?: string;
     }) =>
-      api.post(`/recurring/${id}/mark-paid`, { date, amount, description, account_id, category_id }).then((r) => r.data),
+      api.post(`/recurring/${id}/mark-paid`, { date, amount, description, account_id, category_id, source_account_id }).then((r) => r.data),
     onSuccess: (updatedItem) => {
       patchRecurringItem(qc, updatedItem);
       qc.invalidateQueries({ queryKey: ["recurring"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["mortgage"] });
     },
   });
 }
