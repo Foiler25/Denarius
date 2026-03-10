@@ -14,6 +14,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog,
   DialogContent,
@@ -537,41 +538,41 @@ function RecurringTab({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label>Account</Label>
-                  <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {(accounts as Account[]).filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type)).map((a) => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.account_id}
+                    onValueChange={(v) => setForm({ ...form, account_id: v })}
+                    options={[
+                      { value: "none", label: "None" },
+                      ...(accounts as Account[]).filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type)).map((a) => ({ value: a.id, label: a.name })),
+                    ]}
+                    placeholder="Select…"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Category</Label>
-                  <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.category_id}
+                    onValueChange={(v) => setForm({ ...form, category_id: v })}
+                    options={[
+                      { value: "none", label: "None" },
+                      ...[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    placeholder="Select…"
+                  />
                 </div>
               </div>
               {form.type !== "income" && (
                 <div className="space-y-1">
                   <Label>Expense Account</Label>
-                  <Select value={form.expense_account_id} onValueChange={(v) => setForm({ ...form, expense_account_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {expenseAccounts.filter((ea) => ea.is_active).sort((a, b) => a.name.localeCompare(b.name)).map((ea) => (
-                        <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.expense_account_id}
+                    onValueChange={(v) => setForm({ ...form, expense_account_id: v })}
+                    options={[
+                      { value: "none", label: "None" },
+                      ...expenseAccounts.filter((ea) => ea.is_active).sort((a, b) => a.name.localeCompare(b.name)).map((ea) => ({ value: ea.id, label: ea.name })),
+                    ]}
+                    placeholder="None"
+                  />
                 </div>
               )}
               <div className="space-y-2">
@@ -693,47 +694,43 @@ function RecurringTab({
                     </div>
                     <div className="space-y-1">
                       <Label>Pay From Account</Label>
-                      <Select value={paidSourceAccountId} onValueChange={setPaidSourceAccountId}>
-                        <SelectTrigger><SelectValue placeholder="Select source account" /></SelectTrigger>
-                        <SelectContent>
-                          {(accounts as Account[])
-                            .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
-                            .map((a) => (
-                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={paidSourceAccountId}
+                        onValueChange={setPaidSourceAccountId}
+                        options={(accounts as Account[])
+                          .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
+                          .map((a) => ({ value: a.id, label: a.name }))}
+                        placeholder="Select source account"
+                      />
                     </div>
                   </>
                 ) : (
                   <div className="space-y-1">
                     <Label>Account</Label>
-                    <Select value={paidAccountId} onValueChange={setPaidAccountId}>
-                      <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
-                      <SelectContent>
-                        {(accounts as Account[])
-                          .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
-                          .map((a) => (
-                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={paidAccountId}
+                      onValueChange={setPaidAccountId}
+                      options={(accounts as Account[])
+                        .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
+                        .map((a) => ({ value: a.id, label: a.name }))}
+                      placeholder="Select account"
+                    />
                   </div>
                 )}
                 <div className="space-y-1">
                   <Label>Category</Label>
-                  <Select value={paidCategoryId} onValueChange={setPaidCategoryId}>
-                    <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Uncategorized</SelectItem>
-                      {(categories as Category[])
+                  <SearchableSelect
+                    value={paidCategoryId}
+                    onValueChange={setPaidCategoryId}
+                    options={[
+                      { value: "none", label: "Uncategorized" },
+                      ...(categories as Category[])
                         .slice()
                         .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        .map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    placeholder="Uncategorized"
+                  />
                 </div>
               </div>
             );

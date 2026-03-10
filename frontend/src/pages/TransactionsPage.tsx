@@ -12,9 +12,8 @@ import {
   SelectValue,
   SelectContent,
   SelectItem,
-  SelectGroup,
-  SelectLabel,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Dialog,
   DialogTrigger,
@@ -287,67 +286,51 @@ export default function TransactionsPage() {
                   </div>
                   <div className="space-y-1">
                     <Label>{form.type === "transfer" ? "From Asset Account" : "Asset Account"}</Label>
-                    <Select value={form.account_id} onValueChange={(v) => setForm({ ...form, account_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                      <SelectContent>
-                        {(accounts as Account[]).map((a) => (
-                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.account_id}
+                      onValueChange={(v) => setForm({ ...form, account_id: v })}
+                      options={(accounts as Account[]).map((a) => ({ value: a.id, label: a.name }))}
+                      placeholder="Select…"
+                    />
                   </div>
                 </div>
                 {form.type === "transfer" && (
                   <div className="space-y-1">
                     <Label>To Asset Account</Label>
-                    <Select value={form.transfer_account_id} onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                      <SelectContent>
-                        {(accounts as Account[]).filter((a) => a.id !== form.account_id).map((a) => (
-                          <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.transfer_account_id}
+                      onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}
+                      options={(accounts as Account[]).filter((a) => a.id !== form.account_id).map((a) => ({ value: a.id, label: a.name }))}
+                      placeholder="Select…"
+                    />
                   </div>
                 )}
                 {(form.type === "expense" || form.type === "income") && (
                   <div className="space-y-1">
                     <Label>Expense Account</Label>
-                    <Select value={form.expense_account_id || "none"} onValueChange={(v) => setForm({ ...form, expense_account_id: v === "none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {(accounts as Account[]).length > 0 && (
-                          <SelectGroup>
-                            <SelectLabel>Asset Accounts</SelectLabel>
-                            {(accounts as Account[]).map((a) => (
-                              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                        )}
-                        {(expenseAccounts as ExpenseAccountOut[]).length > 0 && (
-                          <SelectGroup>
-                            <SelectLabel>Expense Accounts</SelectLabel>
-                            {(expenseAccounts as ExpenseAccountOut[]).map((ea) => (
-                              <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
-                            ))}
-                          </SelectGroup>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={form.expense_account_id || "none"}
+                      onValueChange={(v) => setForm({ ...form, expense_account_id: v === "none" ? "" : v })}
+                      options={[
+                        { value: "none", label: "None" },
+                        ...(accounts as Account[]).map((a) => ({ value: a.id, label: a.name, group: "Asset Accounts" })),
+                        ...(expenseAccounts as ExpenseAccountOut[]).map((ea) => ({ value: ea.id, label: ea.name, group: "Expense Accounts" })),
+                      ]}
+                      placeholder="None"
+                    />
                   </div>
                 )}
                 <div className="space-y-1">
                   <Label>Category</Label>
-                  <Select value={form.category_id} onValueChange={(v) => setForm({ ...form, category_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Uncategorized</SelectItem>
-                      {[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.category_id}
+                    onValueChange={(v) => setForm({ ...form, category_id: v })}
+                    options={[
+                      { value: "none", label: "Uncategorized" },
+                      ...[...(categories as Category[])].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    placeholder="Uncategorized"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label>Notes</Label>
@@ -754,67 +737,51 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                     </div>
                     <div className="space-y-1">
                       <Label>{editForm.type === "transfer" ? "From Asset Account" : "Asset Account"}</Label>
-                      <Select value={editForm.account_id} onValueChange={(v) => setEditForm({ ...editForm, account_id: v })}>
-                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                        <SelectContent>
-                          {accounts.map((a) => (
-                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={editForm.account_id}
+                        onValueChange={(v) => setEditForm({ ...editForm, account_id: v })}
+                        options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+                        placeholder="Select…"
+                      />
                     </div>
                   </div>
                   {editForm.type === "transfer" && (
                     <div className="space-y-1">
                       <Label>To Asset Account</Label>
-                      <Select value={editForm.transfer_account_id} onValueChange={(v) => setEditForm({ ...editForm, transfer_account_id: v })}>
-                        <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                        <SelectContent>
-                          {accounts.filter((a) => a.id !== editForm.account_id).map((a) => (
-                            <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={editForm.transfer_account_id}
+                        onValueChange={(v) => setEditForm({ ...editForm, transfer_account_id: v })}
+                        options={accounts.filter((a) => a.id !== editForm.account_id).map((a) => ({ value: a.id, label: a.name }))}
+                        placeholder="Select…"
+                      />
                     </div>
                   )}
                   {(editForm.type === "expense" || editForm.type === "income") && (
                     <div className="space-y-1">
                       <Label>Expense Account</Label>
-                      <Select value={editForm.expense_account_id || "none"} onValueChange={(v) => setEditForm({ ...editForm, expense_account_id: v === "none" ? "" : v })}>
-                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">None</SelectItem>
-                          {accounts.length > 0 && (
-                            <SelectGroup>
-                              <SelectLabel>Asset Accounts</SelectLabel>
-                              {accounts.map((a) => (
-                                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                          )}
-                          {expenseAccounts.length > 0 && (
-                            <SelectGroup>
-                              <SelectLabel>Expense Accounts</SelectLabel>
-                              {expenseAccounts.map((ea) => (
-                                <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
-                              ))}
-                            </SelectGroup>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect
+                        value={editForm.expense_account_id || "none"}
+                        onValueChange={(v) => setEditForm({ ...editForm, expense_account_id: v === "none" ? "" : v })}
+                        options={[
+                          { value: "none", label: "None" },
+                          ...accounts.map((a) => ({ value: a.id, label: a.name, group: "Asset Accounts" })),
+                          ...expenseAccounts.map((ea) => ({ value: ea.id, label: ea.name, group: "Expense Accounts" })),
+                        ]}
+                        placeholder="None"
+                      />
                     </div>
                   )}
                   <div className="space-y-1">
                     <Label>Category</Label>
-                    <Select value={editForm.category_id} onValueChange={(v) => setEditForm({ ...editForm, category_id: v })}>
-                      <SelectTrigger><SelectValue placeholder="Uncategorized" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Uncategorized</SelectItem>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={editForm.category_id}
+                      onValueChange={(v) => setEditForm({ ...editForm, category_id: v })}
+                      options={[
+                        { value: "none", label: "Uncategorized" },
+                        ...categories.map((c) => ({ value: c.id, label: c.name })),
+                      ]}
+                      placeholder="Uncategorized"
+                    />
                   </div>
                   <div className="space-y-1">
                     <Label>Notes</Label>
