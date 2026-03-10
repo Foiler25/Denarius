@@ -169,7 +169,11 @@ function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "incom
   const totalOccurrences = activeItems.reduce((sum, i) => sum + countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
   const totalAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
   const paidOccurrences = activeItems.reduce((sum, i) => sum + countPaidOccurrencesInMonth(i, year, month), 0);
-  const paidAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countPaidOccurrencesInMonth(i, year, month), 0);
+  const paidAmount = activeItems.reduce((sum, i) => {
+    const count = countPaidOccurrencesInMonth(i, year, month);
+    if (count === 0) return sum;
+    return sum + Number(i.last_paid_amount ?? i.amount) * count;
+  }, 0);
 
   const paidPct = totalAmount > 0 ? Math.min(100, (paidAmount / totalAmount) * 100) : 0;
   const allPaid = totalAmount > 0 && paidPct >= 100;
@@ -615,7 +619,7 @@ function RecurringTab({
                 <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
                 <SelectContent>
                   {(accounts as Account[])
-                    .filter((a) => a.type === "asset")
+                    .filter((a) => ["checking", "savings", "cash", "investment"].includes(a.type))
                     .map((a) => (
                       <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                     ))}
