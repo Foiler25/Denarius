@@ -99,6 +99,8 @@ function Spinner() {
   );
 }
 
+const PAYABLE_ACCOUNT_TYPES = ["checking", "savings", "cash", "credit_card", "other"];
+
 const SUMMARY_LABELS: Record<string, string> = {
   bill: "Bills",
   subscription: "Subscriptions",
@@ -494,7 +496,7 @@ function RecurringTab({
                     <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
-                      {(accounts as Account[]).map((a) => (
+                      {(accounts as Account[]).filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type)).map((a) => (
                         <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -619,7 +621,7 @@ function RecurringTab({
                 <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
                 <SelectContent>
                   {(accounts as Account[])
-                    .filter((a) => ["checking", "savings", "cash", "investment"].includes(a.type))
+                    .filter((a) => PAYABLE_ACCOUNT_TYPES.includes(a.type))
                     .map((a) => (
                       <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                     ))}
