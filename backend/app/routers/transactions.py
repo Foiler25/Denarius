@@ -74,7 +74,6 @@ async def list_transactions(
     search: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    is_cleared: Optional[bool] = None,
     expense_account_id: Optional[uuid.UUID] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -92,8 +91,6 @@ async def list_transactions(
         q = q.where(Transaction.date >= start_date)
     if end_date:
         q = q.where(Transaction.date <= end_date)
-    if is_cleared is not None:
-        q = q.where(Transaction.is_cleared == is_cleared)
     if expense_account_id:
         q = q.where(Transaction.expense_account_id == expense_account_id)
 
@@ -161,7 +158,6 @@ async def create_transaction(
                     description=data.description,
                     notes=data.notes,
                     date=data.date,
-                    is_cleared=data.is_cleared,
                     created_by=current_user.id,
                 )
                 db.add(dest_txn)
@@ -199,7 +195,7 @@ async def export_transactions(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Date", "Type", "Description", "Amount", "Category", "Cleared"])
+    writer.writerow(["Date", "Type", "Description", "Amount", "Category"])
     for t in transactions:
         writer.writerow([
             t.date.isoformat(),
@@ -207,7 +203,6 @@ async def export_transactions(
             t.description or "",
             str(t.amount),
             t.category.name if t.category else "",
-            "Yes" if t.is_cleared else "No",
         ])
     output.seek(0)
 

@@ -34,7 +34,6 @@ async def mark_paid(
         description=description if description is not None else item.name,
         date=txn_date,
         created_by=created_by,
-        is_cleared=True,
     )
     db.add(txn)
 

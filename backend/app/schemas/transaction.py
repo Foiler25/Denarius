@@ -22,7 +22,6 @@ class TransactionCreate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     date: date
-    is_cleared: bool = False
     once_per_month_override: Optional[Literal["extra_payment", "next_month_payment"]] = None
 
 
@@ -38,7 +37,6 @@ class TransactionUpdate(BaseModel):
     description: Optional[str] = None
     notes: Optional[str] = None
     date: Optional[_Date] = None
-    is_cleared: Optional[bool] = None
     once_per_month_override: Optional[Literal["extra_payment", "next_month_payment"]] = None
 
 
@@ -57,7 +55,6 @@ class TransactionOut(BaseModel):
     description: Optional[str]
     notes: Optional[str]
     date: date
-    is_cleared: bool
     category: Optional[CategoryOut] = None
     recurring_item: Optional[RecurringItemRef] = None
     account_name: Optional[str] = None

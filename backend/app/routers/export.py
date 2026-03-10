@@ -214,7 +214,6 @@ async def export_data(
                 "description": t.description,
                 "notes": t.notes,
                 "date": t.date.isoformat(),
-                "is_cleared": t.is_cleared,
             }
             for t in txns
         ]
@@ -636,7 +635,6 @@ async def import_data(
                     description=description,
                     notes=item.get("notes"),
                     date=txn_date,
-                    is_cleared=item.get("is_cleared", False),
                 )
                 db.add(new_t)
                 imp += 1

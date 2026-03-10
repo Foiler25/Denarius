@@ -201,7 +201,6 @@ interface TxFormState {
   account_id: string;
   transfer_account_id: string;
   category_id: string;
-  cleared: boolean;
   notes: string;
 }
 
@@ -233,7 +232,6 @@ function DashboardEditTxDialog({
     transfer_account_id: "",
     expense_account_id: "",
     category_id: "none",
-    cleared: false,
     notes: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -251,7 +249,6 @@ function DashboardEditTxDialog({
         transfer_account_id: tx.transfer_account_id ?? "",
         expense_account_id: tx.expense_account_id ?? "",
         category_id: tx.category_id ?? "none",
-        cleared: tx.is_cleared,
         notes: tx.notes ?? "",
       });
     }
@@ -264,7 +261,6 @@ function DashboardEditTxDialog({
       amount: form.amount,
       type: form.type,
       account_id: form.account_id,
-      is_cleared: form.cleared,
       notes: form.notes || null,
       category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
       transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
@@ -434,16 +430,6 @@ function DashboardEditTxDialog({
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="edit-cleared-dashboard"
-                    type="checkbox"
-                    checked={form.cleared}
-                    onChange={(e) => setForm({ ...form, cleared: e.target.checked })}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <Label htmlFor="edit-cleared-dashboard">Cleared / Reconciled</Label>
-                </div>
               </div>
               <DialogFooter className="mt-4">
                 <DialogClose asChild>
@@ -495,7 +481,6 @@ const emptyTxForm = (tz: string): TxFormState => ({
   account_id: "",
   transfer_account_id: "",
   category_id: "none",
-  cleared: false,
   notes: "",
 });
 
@@ -531,7 +516,6 @@ export default function DashboardPage() {
         amount: parseFloat(form.amount),
         type: form.type,
         account_id: form.account_id,
-        is_cleared: form.cleared,
         notes: form.notes || null,
         category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
         transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
@@ -736,16 +720,6 @@ export default function DashboardPage() {
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="dash-cleared"
-                    type="checkbox"
-                    checked={form.cleared}
-                    onChange={(e) => setForm({ ...form, cleared: e.target.checked })}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <Label htmlFor="dash-cleared">Cleared / Reconciled</Label>
                 </div>
               </div>
               <DialogFooter className="mt-4">

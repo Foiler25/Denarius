@@ -47,7 +47,6 @@ interface Transaction {
   recurring_item?: { type: string } | null;
   type: "income" | "expense" | "transfer";
   amount: number;
-  is_cleared: boolean;
   notes?: string;
 }
 
@@ -79,7 +78,6 @@ interface TxFormState {
   transfer_account_id: string;
   expense_account_id: string;
   category_id: string;
-  cleared: boolean;
   notes: string;
 }
 
@@ -92,7 +90,6 @@ const emptyForm = (tz: string): TxFormState => ({
   transfer_account_id: "",
   expense_account_id: "",
   category_id: "none",
-  cleared: false,
   notes: "",
 });
 
@@ -165,7 +162,6 @@ export default function TransactionsPage() {
       amount: parseFloat(form.amount),
       type: form.type,
       account_id: form.account_id,
-      is_cleared: form.cleared,
       notes: form.notes || null,
       category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
       transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
@@ -361,16 +357,6 @@ export default function TransactionsPage() {
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="cleared-add"
-                    type="checkbox"
-                    checked={form.cleared}
-                    onChange={(e) => setForm({ ...form, cleared: e.target.checked })}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  <Label htmlFor="cleared-add">Cleared / Reconciled</Label>
-                </div>
               </div>
               <DialogFooter className="mt-4">
                 <DialogClose asChild>
@@ -509,7 +495,6 @@ export default function TransactionsPage() {
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Asset Account</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Amount</th>
-                    <th className="text-center px-4 py-3 font-medium text-muted-foreground">Cleared</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
@@ -608,7 +593,6 @@ export default function TransactionsPage() {
 
 function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }: { tx: Transaction; accounts: Account[]; expenseAccounts: ExpenseAccountOut[]; categories: Category[]; onDelete: () => void }) {
   const updateTx = useUpdateTransaction(tx.id);
-  const [cleared, setCleared] = useState(tx.is_cleared);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<TxFormState>({
     date: tx.date,
@@ -619,23 +603,12 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
     transfer_account_id: tx.transfer_account_id ?? "",
     expense_account_id: tx.expense_account_id ?? "",
     category_id: tx.category_id ?? "none",
-    cleared: tx.is_cleared,
     notes: tx.notes ?? "",
   });
   const [editError, setEditError] = useState<string | null>(null);
   const [editOverrideOpen, setEditOverrideOpen] = useState(false);
   const [pendingEditPayload, setPendingEditPayload] = useState<Record<string, unknown> | null>(null);
   const accountName = accounts.find((a) => a.id === tx.account_id)?.name ?? "—";
-
-  async function handleClearedChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const newVal = e.target.checked;
-    setCleared(newVal);
-    try {
-      await updateTx.mutateAsync({ is_cleared: newVal });
-    } catch {
-      setCleared(!newVal);
-    }
-  }
 
   function buildEditPayload(override?: string): Record<string, unknown> {
     return {
@@ -644,7 +617,6 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
       amount: editForm.amount,
       type: editForm.type,
       account_id: editForm.account_id,
-      is_cleared: editForm.cleared,
       notes: editForm.notes || null,
       category_id: editForm.category_id !== "none" && editForm.category_id ? editForm.category_id : null,
       transfer_account_id: editForm.type === "transfer" && editForm.transfer_account_id ? editForm.transfer_account_id : null,
@@ -718,15 +690,6 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
       <td className={cn("px-4 py-3 text-right font-semibold", tx.type === "income" ? "text-emerald-600" : "text-destructive")}>
         {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
         {formatCurrency(tx.amount)}
-      </td>
-      <td className="px-4 py-3 text-center">
-        <input
-          type="checkbox"
-          checked={cleared}
-          onChange={handleClearedChange}
-          className="h-4 w-4 rounded border-input cursor-pointer"
-          title="Mark as cleared"
-        />
       </td>
       <td className="px-4 py-3 text-right">
         <div className="flex items-center justify-end gap-1">
@@ -860,16 +823,6 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                       value={editForm.notes}
                       onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                     />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id={`cleared-edit-${tx.id}`}
-                      type="checkbox"
-                      checked={editForm.cleared}
-                      onChange={(e) => setEditForm({ ...editForm, cleared: e.target.checked })}
-                      className="h-4 w-4 rounded border-input"
-                    />
-                    <Label htmlFor={`cleared-edit-${tx.id}`}>Cleared / Reconciled</Label>
                   </div>
                 </div>
                 <DialogFooter className="mt-4">

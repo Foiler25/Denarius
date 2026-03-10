@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, UUIDMixin, TimestampMixin
@@ -45,7 +45,6 @@ class Transaction(Base, UUIDMixin, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    is_cleared: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])
