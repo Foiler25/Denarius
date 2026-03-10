@@ -126,7 +126,7 @@ async def budget_summary(
     total_budgeted = sum(b.amount for b in items)
     over_budget = [b for b in items if b.is_over_budget]
 
-    # ALL expense spending for the month (true total)
+    # Non-recurring expense spending for the month (excludes bills/recurring items)
     total_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
         .where(
@@ -134,6 +134,7 @@ async def budget_summary(
             Transaction.date >= month_start,
             Transaction.date < month_end,
             Transaction.deleted_at == None,
+            Transaction.recurring_item_id == None,
         )
     )
     total_spent = float(total_result.scalar() or Decimal("0"))
