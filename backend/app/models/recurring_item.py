@@ -55,6 +55,10 @@ class RecurringItem(Base, UUIDMixin, TimestampMixin):
     last_paid_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     last_paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(15, 2), nullable=True)
     last_paid_transaction_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("expense_accounts.id", ondelete="SET NULL"), nullable=True
+    )
 
     account: Mapped["Account"] = relationship("Account")
     category: Mapped["Category"] = relationship("Category")
+    expense_account: Mapped["ExpenseAccount"] = relationship("ExpenseAccount")

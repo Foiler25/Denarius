@@ -32,6 +32,7 @@ import {
 } from "@/api/recurring";
 import { useAccounts } from "@/api/accounts";
 import { useCategories } from "@/api/categories";
+import { useExpenseAccounts } from "@/api/expenseAccounts";
 import { formatCurrency, formatDate, todayString, cn } from "@/lib/utils";
 import { useSettingsStore } from "@/store/settingsStore";
 
@@ -55,6 +56,7 @@ interface RecurringItem {
   last_paid_amount?: number | null;
   last_paid_transaction_id?: string | null;
   is_paid_current_period?: boolean;
+  expense_account_id?: string | null;
 }
 
 interface Account { id: string; name: string; type: string; }
@@ -74,6 +76,7 @@ interface RecurringFormState {
   notes: string;
   auto_match: boolean;
   keyword_match: string;
+  expense_account_id: string;
 }
 
 const emptyForm = (tz: string): RecurringFormState => ({
@@ -90,6 +93,7 @@ const emptyForm = (tz: string): RecurringFormState => ({
   notes: "",
   auto_match: false,
   keyword_match: "",
+  expense_account_id: "none",
 });
 
 function Spinner() {
@@ -251,6 +255,7 @@ function RecurringTab({
   const { data: items = [], isLoading, isError } = useRecurring(type, !showInactive);
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
+  const { data: expenseAccounts = [] } = useExpenseAccounts();
 
   const createRecurring = useCreateRecurring();
   const deleteRecurring = useDeleteRecurring();
@@ -283,6 +288,7 @@ function RecurringTab({
       notes: item.notes ?? "",
       auto_match: item.auto_match ?? false,
       keyword_match: item.keyword_match ?? "",
+      expense_account_id: item.expense_account_id ?? "none",
     });
     setFormError(null);
     setFormOpen(true);
@@ -317,6 +323,7 @@ function RecurringTab({
         next_due_date: form.start_date,
         account_id: form.account_id,
         category_id: form.category_id === "none" ? null : form.category_id,
+        expense_account_id: form.expense_account_id === "none" ? null : form.expense_account_id,
         auto_match: form.auto_match,
         keyword_match: form.keyword_match.trim() || null,
       };
@@ -553,6 +560,20 @@ function RecurringTab({
                   </Select>
                 </div>
               </div>
+              {form.type !== "income" && (
+                <div className="space-y-1">
+                  <Label>Expense Account</Label>
+                  <Select value={form.expense_account_id} onValueChange={(v) => setForm({ ...form, expense_account_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {expenseAccounts.filter((ea) => ea.is_active).sort((a, b) => a.name.localeCompare(b.name)).map((ea) => (
+                        <SelectItem key={ea.id} value={ea.id}>{ea.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Auto-match transactions</Label>

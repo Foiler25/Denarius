@@ -21,6 +21,7 @@ class RecurringCreate(BaseModel):
     auto_match: bool = False
     keyword_match: Optional[str] = None
     notes: Optional[str] = None
+    expense_account_id: Optional[uuid.UUID] = None
 
 
 class RecurringUpdate(BaseModel):
@@ -38,6 +39,7 @@ class RecurringUpdate(BaseModel):
     keyword_match: Optional[str] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    expense_account_id: Optional[uuid.UUID] = None
 
 
 class RecurringOut(BaseModel):
@@ -64,6 +66,7 @@ class RecurringOut(BaseModel):
     last_paid_amount: Optional[Decimal] = None
     last_paid_transaction_id: Optional[uuid.UUID] = None
     is_paid_current_period: bool = False
+    expense_account_id: Optional[uuid.UUID] = None
 
 
 class MarkPaidRequest(BaseModel):
