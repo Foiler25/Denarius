@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, ArrowRight, CalendarClock, Pencil, Plus, TrendingUp, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, CalendarClock, Pencil, Plus, TrendingUp, Wallet, X } from "lucide-react";
 import {
   LineChart,
   Line,
@@ -472,6 +472,8 @@ export default function DashboardPage() {
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
   const hiddenAccountIds = useDashboardStore((s) => s.hiddenAccountIds);
+  const dismissedBudgetAlerts = useDashboardStore((s) => s.dismissedBudgetAlerts);
+  const dismissBudgetAlert = useDashboardStore((s) => s.dismissBudgetAlert);
   const visibleAccounts = accounts.filter((a) => a.is_active && !hiddenAccountIds.includes(a.id));
   const { timezone } = useSettingsStore();
 
@@ -570,6 +572,7 @@ export default function DashboardPage() {
       amount: number;
     }>;
     over_budget_alerts: Array<{
+      id: number;
       category: { name: string } | null;
       amount: number;
       actual_spent: number;
@@ -836,24 +839,40 @@ export default function DashboardPage() {
       <AccountBalancesChart />
 
       {/* Over Budget Alerts */}
-      {dashboard.over_budget_alerts && dashboard.over_budget_alerts.length > 0 && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="h-4 w-4 text-destructive" />
-            <span className="font-semibold text-destructive text-sm">Over Budget Alerts</span>
+      {(() => {
+        const month = new Date().toISOString().slice(0, 7);
+        const visible = (dashboard.over_budget_alerts ?? []).filter(
+          (cat) => !dismissedBudgetAlerts.includes(`${month}:${cat.id}`)
+        );
+        if (visible.length === 0) return null;
+        return (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <span className="font-semibold text-destructive text-sm">Over Budget Alerts</span>
+            </div>
+            <div className="space-y-2">
+              {visible.map((cat) => (
+                <div key={cat.category?.name} className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{cat.category?.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-destructive">
+                      {formatCurrency(cat.actual_spent)} / {formatCurrency(cat.amount)}
+                    </span>
+                    <button
+                      onClick={() => dismissBudgetAlert(cat.id)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title="Dismiss until next month"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-2">
-            {dashboard.over_budget_alerts.map((cat) => (
-              <div key={cat.category?.name} className="flex items-center justify-between text-sm">
-                <span className="font-medium">{cat.category?.name}</span>
-                <span className="text-destructive">
-                  {formatCurrency(cat.actual_spent)} / {formatCurrency(cat.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Accounts & Balances */}

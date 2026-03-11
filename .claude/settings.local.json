@@ -59,7 +59,8 @@
       "Bash(python3 -c \" import json,sys spec=json.load\\(sys.stdin\\) schemas=spec.get\\(''components'',{}\\).get\\(''schemas'',{}\\) for k in schemas: if ''Paid'' in k or ''paid'' in k or ''Mark'' in k or ''mark'' in k or ''Recurring'' in k: print\\(k, '':'', json.dumps\\(schemas[k].get\\(''properties'',{}\\), indent=2\\)\\) \")",
       "Bash(curl -sv http://localhost:9723/api/v1/recurring/2b58e9af-ccdb-47fd-9222-f18e675e403d/mark-paid -X POST -H \"Content-Type: application/json\" -d '{\"\"date\"\":\"\"2026-03-09\"\",\"\"amount\"\":100}')",
       "Bash(docker compose logs backend --since 15m)",
-      "Bash(docker compose exec backend python3 -c \":*)"
+      "Bash(docker compose exec backend python3 -c \":*)",
+      "Bash(grep -r \"over_budget\\\\|over-budget\\\\|dismissed\\\\|dismiss\" /Users/loofa/Documents/Denarius/frontend/src/ --include=*.tsx --include=*.ts)"
     ]
   },
   "enableAllProjectMcpServers": true,

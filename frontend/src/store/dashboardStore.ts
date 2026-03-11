@@ -3,6 +3,7 @@ import { updatePreferences } from "@/api/auth";
 import { useAuthStore } from "./authStore";
 
 const STORAGE_KEY = "denarius-chart-hidden-accounts";
+const DISMISSED_ALERTS_KEY = "denarius-dismissed-budget-alerts";
 
 function readHiddenAccounts(): string[] {
   try {
@@ -14,10 +15,22 @@ function readHiddenAccounts(): string[] {
   }
 }
 
+function readDismissedAlerts(): string[] {
+  try {
+    const v = localStorage.getItem(DISMISSED_ALERTS_KEY);
+    if (!v) return [];
+    return JSON.parse(v);
+  } catch {
+    return [];
+  }
+}
+
 interface DashboardState {
   hiddenAccountIds: string[];
   toggleAccount: (id: string) => void;
   setHiddenAccounts: (ids: string[]) => void;
+  dismissedBudgetAlerts: string[];
+  dismissBudgetAlert: (id: number) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set) => ({
@@ -40,4 +53,16 @@ export const useDashboardStore = create<DashboardState>((set) => ({
     } catch {}
     set({ hiddenAccountIds: ids });
   },
+  dismissedBudgetAlerts: readDismissedAlerts(),
+  dismissBudgetAlert: (id) =>
+    set((s) => {
+      const month = new Date().toISOString().slice(0, 7);
+      const key = `${month}:${id}`;
+      if (s.dismissedBudgetAlerts.includes(key)) return s;
+      const next = [...s.dismissedBudgetAlerts, key];
+      try {
+        localStorage.setItem(DISMISSED_ALERTS_KEY, JSON.stringify(next));
+      } catch {}
+      return { dismissedBudgetAlerts: next };
+    }),
 }));
