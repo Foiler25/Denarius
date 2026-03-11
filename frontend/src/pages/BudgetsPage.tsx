@@ -276,11 +276,12 @@ export default function BudgetsPage() {
                 Add Budget
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-[95vw] sm:max-w-sm">
+            <DialogContent className="max-w-[95vw] sm:max-w-sm flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
               <DialogHeader>
                 <DialogTitle>Add Budget</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleAddBudget}>
+              <form onSubmit={handleAddBudget} className="flex flex-col min-h-0 flex-1">
+                <div className="overflow-y-auto flex-1 min-h-0">
                 <div className="space-y-4 py-2">
                   {addError && (
                     <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -314,7 +315,8 @@ export default function BudgetsPage() {
                     For month: <strong>{formatMonth(month)}</strong>
                   </p>
                 </div>
-                <DialogFooter className="mt-4">
+                </div>
+                <DialogFooter className="pt-4">
                   <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>

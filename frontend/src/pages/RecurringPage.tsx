@@ -447,11 +447,12 @@ function RecurringTab({
 
       {/* Add/Edit Dialog */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>{editItem ? "Edit" : "Add"} {label.slice(0, -1)}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+            <div className="overflow-y-auto flex-1 min-h-0">
             <div className="space-y-4 py-2">
               {formError && (
                 <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -617,7 +618,8 @@ function RecurringTab({
                 />
               </div>
             </div>
-            <DialogFooter className="mt-4">
+            </div>
+            <DialogFooter className="pt-4">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
@@ -649,10 +651,11 @@ function RecurringTab({
 
       {/* Mark as Paid Dialog */}
       <Dialog open={markPaidOpen} onOpenChange={(open) => { setMarkPaidOpen(open); if (!open) setConfirmNoTxn(false); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Mark as Paid</DialogTitle>
           </DialogHeader>
+          <div className="overflow-y-auto flex-1 min-h-0">
           {(() => {
             const isMortgage = (accounts as Account[]).find((a) => a.id === paidAccountId)?.type === "mortgage";
             const mortgageName = isMortgage ? (accounts as Account[]).find((a) => a.id === paidAccountId)?.name : null;
@@ -736,7 +739,8 @@ function RecurringTab({
               </div>
             );
           })()}
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col pt-4">
             <div className="flex justify-end gap-2">
               <DialogClose asChild>
                 <Button variant="outline">Cancel</Button>

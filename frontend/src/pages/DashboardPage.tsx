@@ -299,7 +299,7 @@ function DashboardEditTxDialog({
   return (
     <>
       <Dialog open={!!txId} onOpenChange={(o) => { if (!o) onClose(); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Edit Transaction</DialogTitle>
           </DialogHeader>
@@ -308,7 +308,8 @@ function DashboardEditTxDialog({
               <div className="h-6 w-6 rounded-full border-4 border-primary border-t-transparent animate-spin" />
             </div>
           ) : (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+              <div className="overflow-y-auto flex-1 min-h-0">
               <div className="space-y-4 py-2">
                 {error && (
                   <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -414,7 +415,8 @@ function DashboardEditTxDialog({
                   />
                 </div>
               </div>
-              <DialogFooter className="mt-4">
+              </div>
+              <DialogFooter className="pt-4">
                 <DialogClose asChild>
                   <Button type="button" variant="outline">Cancel</Button>
                 </DialogClose>
@@ -580,16 +582,16 @@ export default function DashboardPage() {
   };
 
   const nonBillSpending = dashboard.monthly_spending.non_bill_spending;
-  const spendingPct =
-    dashboard.monthly_spending.budget_total > 0
-      ? (nonBillSpending / dashboard.monthly_spending.budget_total) * 100
-      : 0;
   const overBudget =
     nonBillSpending > dashboard.monthly_spending.budget_total &&
     dashboard.monthly_spending.budget_total > 0;
-  const overflowPct = overBudget
-    ? Math.min(30, ((nonBillSpending - dashboard.monthly_spending.budget_total) / dashboard.monthly_spending.budget_total) * 100)
-    : 0;
+  const greenWidth =
+    dashboard.monthly_spending.budget_total > 0
+      ? overBudget
+        ? (dashboard.monthly_spending.budget_total / nonBillSpending) * 100
+        : (nonBillSpending / dashboard.monthly_spending.budget_total) * 100
+      : 0;
+  const redWidth = overBudget ? 100 - greenWidth : 0;
 
   const cashFlow = dashboard.monthly_spending.current_month_income - dashboard.monthly_spending.current_month;
 
@@ -607,11 +609,12 @@ export default function DashboardPage() {
               Add Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
             <DialogHeader>
               <DialogTitle>Add Transaction</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddSubmit}>
+            <form onSubmit={handleAddSubmit} className="flex flex-col min-h-0 flex-1">
+              <div className="overflow-y-auto flex-1 min-h-0">
               <div className="space-y-4 py-2">
                 {formError && (
                   <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -704,7 +707,8 @@ export default function DashboardPage() {
                   />
                 </div>
               </div>
-              <DialogFooter className="mt-4">
+              </div>
+              <DialogFooter className="pt-4">
                 <DialogClose asChild>
                   <Button type="button" variant="outline">Cancel</Button>
                 </DialogClose>
@@ -756,11 +760,11 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted-foreground mt-1">
                   of {formatCurrency(dashboard.monthly_spending.budget_total)} budgeted
                 </p>
-                <div className="mt-2 h-1.5 w-full bg-muted rounded-full relative overflow-visible">
+                <div className="mt-2 h-1.5 w-full bg-muted rounded-full relative overflow-hidden">
                   <div
                     className="absolute top-0 left-0 h-full bg-emerald-500 transition-all"
                     style={{
-                      width: `${Math.min(100, spendingPct)}%`,
+                      width: `${greenWidth}%`,
                       borderRadius: overBudget ? '9999px 0 0 9999px' : '9999px',
                     }}
                   />
@@ -768,8 +772,8 @@ export default function DashboardPage() {
                     <div
                       className="absolute top-0 h-full bg-destructive transition-all"
                       style={{
-                        left: '100%',
-                        width: `${overflowPct}%`,
+                        left: `${greenWidth}%`,
+                        width: `${redWidth}%`,
                         borderRadius: '0 9999px 9999px 0',
                       }}
                     />

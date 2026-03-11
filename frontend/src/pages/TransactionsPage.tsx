@@ -229,11 +229,12 @@ export default function TransactionsPage() {
               Add Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
             <DialogHeader>
               <DialogTitle>Add Transaction</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleAddSubmit}>
+            <form onSubmit={handleAddSubmit} className="flex flex-col min-h-0 flex-1">
+              <div className="overflow-y-auto flex-1 min-h-0">
               <div className="space-y-4 py-2">
                 {formError && (
                   <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -341,7 +342,8 @@ export default function TransactionsPage() {
                   />
                 </div>
               </div>
-              <DialogFooter className="mt-4">
+              </div>
+              <DialogFooter className="pt-4">
                 <DialogClose asChild>
                   <Button type="button" variant="outline">Cancel</Button>
                 </DialogClose>
@@ -682,11 +684,12 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                 <Pencil className="h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-[95vw] sm:max-w-md">
+            <DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
               <DialogHeader>
                 <DialogTitle>Edit Transaction</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleEditSubmit}>
+              <form onSubmit={handleEditSubmit} className="flex flex-col min-h-0 flex-1">
+                <div className="overflow-y-auto flex-1 min-h-0">
                 <div className="space-y-4 py-2">
                   {editError && (
                     <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
@@ -792,7 +795,8 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                     />
                   </div>
                 </div>
-                <DialogFooter className="mt-4">
+                </div>
+                <DialogFooter className="pt-4">
                   <DialogClose asChild>
                     <Button type="button" variant="outline">Cancel</Button>
                   </DialogClose>

@@ -506,11 +506,11 @@ export default function MortgagePage() {
 
           {/* Record Payment Dialog */}
           <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-            <DialogContent className="max-w-[95vw] sm:max-w-md">
+            <DialogContent className="max-w-[95vw] sm:max-w-md flex flex-col top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1/2 sm:max-h-[85vh]">
               <DialogHeader>
                 <DialogTitle>Record Mortgage Payment</DialogTitle>
               </DialogHeader>
-
+              <div className="overflow-y-auto flex-1 min-h-0">
               <Tabs value={paymentDialogTab} onValueChange={(v) => {
                 setPaymentDialogTab(v as "monthly" | "extra");
                 setRecordError(null);
@@ -610,12 +610,13 @@ export default function MortgagePage() {
               </Tabs>
 
               {recordError && (
-                <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2 mt-4">
                   {recordError}
                 </div>
               )}
+              </div>
 
-              <DialogFooter>
+              <DialogFooter className="pt-4">
                 <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
                   Cancel
                 </Button>

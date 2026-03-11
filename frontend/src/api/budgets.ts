@@ -19,7 +19,10 @@ export function useCreateBudget() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Record<string, unknown>) => api.post("/budgets", data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -27,7 +30,10 @@ export function useUpdateBudget(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: { amount: number }) => api.put(`/budgets/${id}`, data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -35,7 +41,10 @@ export function useDeleteBudget() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.delete(`/budgets/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -44,7 +53,10 @@ export function useCopyMonth() {
   return useMutation({
     mutationFn: (data: { from_month: string; to_month: string }) =>
       api.post("/budgets/copy-month", data).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["budgets"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["budgets"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 }
 
@@ -67,6 +79,7 @@ export function useSetMonthlyTarget() {
       api.put("/budgets/monthly-target", data).then((r) => r.data),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ["budgets", "monthly-target", variables.month] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }
@@ -78,6 +91,7 @@ export function useDeleteMonthlyTarget() {
       api.delete("/budgets/monthly-target", { params: { month } }),
     onSuccess: (_data, month) => {
       qc.invalidateQueries({ queryKey: ["budgets", "monthly-target", month] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 }
