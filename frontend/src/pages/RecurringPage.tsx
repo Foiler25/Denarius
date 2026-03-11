@@ -526,10 +526,11 @@ function RecurringTab({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 min-w-0 overflow-hidden">
                 <Label>Next Due / Start Date</Label>
                 <Input
                   type="date"
+                  className="w-full"
                   value={form.start_date}
                   onChange={(e) => setForm({ ...form, start_date: e.target.value })}
                   required

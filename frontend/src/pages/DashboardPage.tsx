@@ -899,7 +899,7 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {visibleAccounts.map((account) => {
-                  const isAsset = ["checking", "savings", "investment", "property"].includes(account.type);
+                  const isAsset = ["checking", "savings", "investment", "property", "cash"].includes(account.type);
                   return (
                     <div key={String(account.id)} className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0">

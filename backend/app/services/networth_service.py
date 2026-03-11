@@ -13,6 +13,7 @@ ASSET_TYPES = {
     AccountType.savings,
     AccountType.investment,
     AccountType.property,
+    AccountType.cash,
 }
 LIABILITY_TYPES = {AccountType.credit_card, AccountType.mortgage, AccountType.loan}
 

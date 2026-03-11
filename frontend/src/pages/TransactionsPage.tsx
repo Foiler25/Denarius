@@ -240,8 +240,8 @@ export default function TransactionsPage() {
                     {formError}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 min-w-0">
                     <Label>Date</Label>
                     <Input
                       type="date"
@@ -693,8 +693,8 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
                       {editError}
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1 min-w-0">
                       <Label>Date</Label>
                       <Input
                         type="date"
