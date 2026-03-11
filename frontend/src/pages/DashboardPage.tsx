@@ -315,8 +315,8 @@ function DashboardEditTxDialog({
                     {error}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 min-w-0">
                     <Label>Date</Label>
                     <Input
                       type="date"
@@ -325,7 +325,7 @@ function DashboardEditTxDialog({
                       required
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <Label>Type</Label>
                     <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, transfer_account_id: v !== "transfer" ? "" : form.transfer_account_id })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -618,8 +618,8 @@ export default function DashboardPage() {
                     {formError}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1 min-w-0">
                     <Label>Date</Label>
                     <Input
                       type="date"
@@ -628,7 +628,7 @@ export default function DashboardPage() {
                       required
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <Label>Type</Label>
                     <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, transfer_account_id: v !== "transfer" ? "" : form.transfer_account_id })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>

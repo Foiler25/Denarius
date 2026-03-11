@@ -526,7 +526,7 @@ function RecurringTab({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1 min-w-0 overflow-hidden">
+              <div className="space-y-1">
                 <Label>Next Due / Start Date</Label>
                 <Input
                   type="date"

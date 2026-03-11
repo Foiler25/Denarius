@@ -82,4 +82,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
