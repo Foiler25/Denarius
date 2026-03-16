@@ -199,13 +199,12 @@ interface TxFormState {
   type: string;
   account_id: string;
   transfer_account_id: string;
+  expense_account_id: string;
   category_id: string;
   notes: string;
 }
 
-interface EditTxFormState extends TxFormState {
-  expense_account_id: string;
-}
+type EditTxFormState = TxFormState;
 
 function DashboardEditTxDialog({
   txId,
@@ -464,6 +463,7 @@ const emptyTxForm = (tz: string): TxFormState => ({
   amount: "",
   type: "expense",
   account_id: "",
+  expense_account_id: "",
   transfer_account_id: "",
   category_id: "none",
   notes: "",
@@ -506,6 +506,7 @@ export default function DashboardPage() {
         notes: form.notes || null,
         category_id: form.category_id !== "none" && form.category_id ? form.category_id : null,
         transfer_account_id: form.type === "transfer" && form.transfer_account_id ? form.transfer_account_id : null,
+        expense_account_id: (form.type === "expense" || form.type === "income") && form.expense_account_id ? form.expense_account_id : null,
       });
       setAddOpen(false);
       setForm(emptyTxForm(timezone));
@@ -683,6 +684,21 @@ export default function DashboardPage() {
                       onValueChange={(v) => setForm({ ...form, transfer_account_id: v })}
                       options={accounts.filter((a) => a.id !== form.account_id).map((a) => ({ value: a.id, label: a.name }))}
                       placeholder="Select…"
+                    />
+                  </div>
+                )}
+                {(form.type === "expense" || form.type === "income") && (
+                  <div className="space-y-1">
+                    <Label>Expense Account</Label>
+                    <SearchableSelect
+                      value={form.expense_account_id || "none"}
+                      onValueChange={(v) => setForm({ ...form, expense_account_id: v === "none" ? "" : v })}
+                      options={[
+                        { value: "none", label: "None" },
+                        ...(accounts as Array<{ id: string; name: string }>).map((a) => ({ value: a.id, label: a.name, group: "Asset Accounts" })),
+                        ...(expenseAccounts as ExpenseAccountOut[]).map((ea) => ({ value: ea.id, label: ea.name, group: "Expense Accounts" })),
+                      ]}
+                      placeholder="None"
                     />
                   </div>
                 )}

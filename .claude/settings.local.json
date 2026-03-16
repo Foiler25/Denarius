@@ -64,7 +64,8 @@
       "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
       "Bash(sed -i '' 's/max-h-\\\\[85vh\\\\]/max-h-[calc\\(100svh-2rem\\)]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)",
       "Bash(grep -l \"max-h-\\\\[calc\\(100svh-2rem\\)\\\\]\" *.tsx)",
-      "Bash(perl -i -pe 's/h-\\\\[calc\\\\\\(100svh-2rem\\\\\\)\\\\] sm:h-auto sm:max-h-\\\\[85vh\\\\]/top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1\\\\/2 sm:max-h-[85vh]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)"
+      "Bash(perl -i -pe 's/h-\\\\[calc\\\\\\(100svh-2rem\\\\\\)\\\\] sm:h-auto sm:max-h-\\\\[85vh\\\\]/top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1\\\\/2 sm:max-h-[85vh]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)",
+      "Bash(npx tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
