@@ -154,7 +154,7 @@ async def create_transaction(
                     category_id=data.category_id,
                     transfer_account_id=data.account_id,
                     amount=data.amount,
-                    type=TransactionType.income,
+                    type=TransactionType.transfer,
                     description=data.description,
                     notes=data.notes,
                     date=data.date,
@@ -245,7 +245,7 @@ async def update_transaction(
     amount_delta = txn.amount - old_amount
 
     if txn.type == TransactionType.transfer and txn.transfer_account_id:
-        # Find the counterpart income leg using pre-edit values
+        # Find the counterpart transfer leg using pre-edit values
         dest_result = await db.execute(
             select(Transaction).where(
                 Transaction.account_id == txn.transfer_account_id,
