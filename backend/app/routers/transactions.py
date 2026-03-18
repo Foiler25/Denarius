@@ -258,15 +258,23 @@ async def update_transaction(
         )
         dest_txn = dest_result.scalar_one_or_none()
 
+        is_destination = txn.paired_transaction_id is not None
+
         if amount_delta != 0:
-            src_account = await db.get(Account, txn.account_id)
-            if src_account:
-                src_account.current_balance -= amount_delta
+            this_account = await db.get(Account, txn.account_id)
+            if this_account:
+                if is_destination:
+                    this_account.current_balance += amount_delta
+                else:
+                    this_account.current_balance -= amount_delta
             if dest_txn:
                 dest_txn.amount = txn.amount
-                dest_account = await db.get(Account, dest_txn.account_id)
-                if dest_account:
-                    dest_account.current_balance += amount_delta
+                other_account = await db.get(Account, dest_txn.account_id)
+                if other_account:
+                    if is_destination:
+                        other_account.current_balance -= amount_delta
+                    else:
+                        other_account.current_balance += amount_delta
 
         # Sync metadata fields to counterpart leg
         if dest_txn:
@@ -327,7 +335,7 @@ async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: d
     """Reverse the account balance effect of a transaction and soft-delete it."""
     await detach_recurring(txn, db)
 
-    # Cascade delete paired transaction (e.g. linked mortgage payment legs)
+    # Cascade delete paired transaction (e.g. linked mortgage payment legs, transfer source)
     if txn.paired_transaction_id:
         paired = await db.get(Transaction, txn.paired_transaction_id)
         if paired and paired.deleted_at is None:
@@ -337,7 +345,10 @@ async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: d
                     paired_account.current_balance += paired.amount
                 elif paired.type == TransactionType.income:
                     paired_account.current_balance -= paired.amount
-            paired.paired_transaction_id = None  # clear to prevent recursive cascade
+                elif paired.type == TransactionType.transfer:
+                    # Source leg of a transfer — was subtracted from this account
+                    paired_account.current_balance += paired.amount
+            paired.paired_transaction_id = None
             paired.deleted_at = now
 
     txn.deleted_at = now
@@ -351,24 +362,30 @@ async def _reverse_balance_and_delete(txn: Transaction, db: AsyncSession, now: d
     elif txn.type == TransactionType.income:
         account.current_balance -= txn.amount
     elif txn.type == TransactionType.transfer and txn.transfer_account_id:
-        # Source side: was subtracted from this account
-        account.current_balance += txn.amount
-        # Find and soft-delete the matching destination leg
-        dest_result = await db.execute(
-            select(Transaction).where(
-                Transaction.account_id == txn.transfer_account_id,
-                Transaction.transfer_account_id == txn.account_id,
-                Transaction.amount == txn.amount,
-                Transaction.date == txn.date,
-                Transaction.deleted_at == None,
+        is_destination = txn.paired_transaction_id is not None
+        if is_destination:
+            # Destination: was added to this account → subtract to reverse
+            account.current_balance -= txn.amount
+            # Source was already handled by the cascade above
+        else:
+            # Source: was subtracted from this account → add to reverse
+            account.current_balance += txn.amount
+            # Find and soft-delete the matching destination leg
+            dest_result = await db.execute(
+                select(Transaction).where(
+                    Transaction.account_id == txn.transfer_account_id,
+                    Transaction.transfer_account_id == txn.account_id,
+                    Transaction.amount == txn.amount,
+                    Transaction.date == txn.date,
+                    Transaction.deleted_at == None,
+                )
             )
-        )
-        dest_txn = dest_result.scalar_one_or_none()
-        if dest_txn:
-            dest_txn.deleted_at = now
-            dest_account = await db.get(Account, dest_txn.account_id)
-            if dest_account:
-                dest_account.current_balance -= dest_txn.amount
+            dest_txn = dest_result.scalar_one_or_none()
+            if dest_txn:
+                dest_txn.deleted_at = now
+                dest_account = await db.get(Account, dest_txn.account_id)
+                if dest_account:
+                    dest_account.current_balance -= dest_txn.amount
 
 
 async def _get_or_404(transaction_id: uuid.UUID, db: AsyncSession) -> Transaction:

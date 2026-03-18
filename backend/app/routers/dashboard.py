@@ -134,7 +134,7 @@ async def dashboard_summary(
     recent_result = await db.execute(
         select(Transaction)
         .options(selectinload(Transaction.category), selectinload(Transaction.account))
-        .where(Transaction.deleted_at == None)
+        .where(Transaction.deleted_at == None, Transaction.is_hidden != True)
         .order_by(Transaction.date.desc(), Transaction.created_at.desc())
         .limit(10)
     )
