@@ -16,6 +16,7 @@ from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.routers.system import get_app_date
+from app.services.recurring_service import find_and_attach_recurring
 from app.schemas.mortgage import (
     AmortizationRow,
     ExtraPaymentCalcRequest,
@@ -241,6 +242,13 @@ async def record_mortgage_payment(
             item.last_paid_transaction_id = source_txn.id
             await db.commit()
             break
+
+    # Fallback: if no recurring item was linked via account lookup, try standard
+    # keyword + amount matching (e.g. "*Mortgage payment*" pattern on source account)
+    if source_txn.recurring_item_id is None:
+        matched = await find_and_attach_recurring(source_txn, db)
+        if matched:
+            await db.commit()
 
     return MortgagePaymentResult(
         source_transaction_id=source_txn.id,
