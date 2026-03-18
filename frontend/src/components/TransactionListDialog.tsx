@@ -29,6 +29,7 @@ interface Tx {
   date: string;
   description?: string | null;
   type: "income" | "expense" | "transfer";
+  transfer_account_id?: string | null;
   amount: number | string;
   category?: { name: string } | null;
   expense_account_name?: string | null;
@@ -68,8 +69,8 @@ export function TransactionListDialog({ open, onOpenChange, title, filter }: Tra
   const items: Tx[] = data?.items ?? [];
 
   const { income, expense, net } = useMemo(() => {
-    const inc = items.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-    const exp = items.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+    const inc = items.filter((t) => t.type === "income" && !t.transfer_account_id).reduce((s, t) => s + Number(t.amount), 0);
+    const exp = items.filter((t) => t.type === "expense" && !t.transfer_account_id).reduce((s, t) => s + Number(t.amount), 0);
     return { income: inc, expense: exp, net: inc - exp };
   }, [items]);
 
@@ -137,27 +138,27 @@ export function TransactionListDialog({ open, onOpenChange, title, filter }: Tra
                     <td className="px-4 py-2.5">
                       <span
                         className={
-                          tx.type === "income"
+                          tx.transfer_account_id
+                            ? "text-muted-foreground text-xs font-medium"
+                            : tx.type === "income"
                             ? "text-emerald-600 dark:text-emerald-400 text-xs font-medium"
-                            : tx.type === "expense"
-                            ? "text-destructive text-xs font-medium"
-                            : "text-muted-foreground text-xs font-medium"
+                            : "text-destructive text-xs font-medium"
                         }
                       >
-                        {tx.type}
+                        {tx.transfer_account_id ? "transfer" : tx.type}
                       </span>
                     </td>
                     <td
                       className={
                         "px-6 py-2.5 text-right font-semibold " +
-                        (tx.type === "income"
+                        (tx.transfer_account_id
+                          ? "text-foreground"
+                          : tx.type === "income"
                           ? "text-emerald-600 dark:text-emerald-400"
-                          : tx.type === "expense"
-                          ? "text-destructive"
-                          : "text-foreground")
+                          : "text-destructive")
                       }
                     >
-                      {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
+                      {tx.transfer_account_id ? "" : tx.type === "income" ? "+" : "-"}
                       {formatCurrency(Number(tx.amount))}
                     </td>
                   </tr>

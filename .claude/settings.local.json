@@ -66,7 +66,14 @@
       "Bash(grep -l \"max-h-\\\\[calc\\(100svh-2rem\\)\\\\]\" *.tsx)",
       "Bash(perl -i -pe 's/h-\\\\[calc\\\\\\(100svh-2rem\\\\\\)\\\\] sm:h-auto sm:max-h-\\\\[85vh\\\\]/top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1\\\\/2 sm:max-h-[85vh]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)",
       "Bash(npx tsc:*)",
-      "Bash(find /Users/loofa/Documents/Denarius/frontend/src/components/dashboard -type f -name *.tsx)"
+      "Bash(find /Users/loofa/Documents/Denarius/frontend/src/components/dashboard -type f -name *.tsx)",
+      "Bash(python -c \"from app.routers import transactions, accounts, dashboard, reports; print\\(''OK''\\)\")",
+      "Bash(python3 -c \"from app.routers import transactions, accounts, dashboard, reports; print\\(''OK''\\)\")",
+      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/transactions.py)",
+      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/accounts.py)",
+      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/dashboard.py)",
+      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/reports.py)",
+      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/alembic/versions/0022_transfers_as_expense_income.py)"
     ]
   },
   "enableAllProjectMcpServers": true,

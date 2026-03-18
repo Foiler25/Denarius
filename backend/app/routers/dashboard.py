@@ -53,6 +53,7 @@ async def dashboard_summary(
             Transaction.date >= current_month_start,
             Transaction.date < next_month_start,
             Transaction.deleted_at == None,
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
     )
@@ -66,6 +67,7 @@ async def dashboard_summary(
             Transaction.date >= current_month_start,
             Transaction.date < next_month_start,
             Transaction.deleted_at == None,
+            Transaction.transfer_account_id == None,
             Transaction.recurring_item_id == None,
             Account.type.not_in(_liability_types),
         )
@@ -80,6 +82,7 @@ async def dashboard_summary(
             Transaction.date >= current_month_start,
             Transaction.date < next_month_start,
             Transaction.deleted_at == None,
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
     )
@@ -98,6 +101,7 @@ async def dashboard_summary(
             Transaction.date >= prev_month_start,
             Transaction.date < current_month_start,
             Transaction.deleted_at == None,
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
     )

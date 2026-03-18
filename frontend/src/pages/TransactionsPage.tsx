@@ -50,6 +50,7 @@ interface Transaction {
 }
 
 function getTxLabel(tx: Transaction): string {
+  if (tx.transfer_account_id) return "Transfer";
   if (tx.recurring_item?.type === "subscription") return "Sub";
   if (tx.recurring_item?.type === "bill") return "Bill";
   if (/mortgage|loan/i.test(tx.category?.name ?? "")) return "Bill";
@@ -664,16 +665,16 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
           variant="outline"
           className={cn(
             "text-xs capitalize",
+            tx.transfer_account_id ? "border-muted-foreground text-muted-foreground" :
             tx.type === "income" ? "border-emerald-500 text-emerald-600" :
-            tx.type === "transfer" ? "border-muted-foreground text-muted-foreground" :
             "border-destructive text-destructive"
           )}
         >
           {getTxLabel(tx)}
         </Badge>
       </td>
-      <td className={cn("px-4 py-3 text-right font-semibold", tx.type === "income" ? "text-emerald-600" : "text-destructive")}>
-        {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
+      <td className={cn("px-4 py-3 text-right font-semibold", tx.transfer_account_id ? "text-foreground" : tx.type === "income" ? "text-emerald-600" : "text-destructive")}>
+        {tx.transfer_account_id ? "" : tx.type === "income" ? "+" : "-"}
         {formatCurrency(tx.amount)}
       </td>
       <td className="px-4 py-3 text-right">

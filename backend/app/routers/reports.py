@@ -36,6 +36,7 @@ async def spending_by_category(
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.deleted_at == None,
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
         .group_by(Category.id, Category.name, Category.color)
@@ -81,6 +82,7 @@ async def income_vs_expense(
         .where(
             Transaction.deleted_at == None,
             Transaction.type.in_([TransactionType.income, TransactionType.expense]),
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
         .group_by("year", "month", Transaction.type)
@@ -133,6 +135,7 @@ async def monthly_trend(
         .where(
             Transaction.deleted_at == None,
             Transaction.type == TransactionType.expense,
+            Transaction.transfer_account_id == None,
             Account.type.not_in(_liability_types),
         )
         .group_by("year", "month")

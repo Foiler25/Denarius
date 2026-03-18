@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, select, func, case
+from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
@@ -94,7 +94,7 @@ async def get_balance_history(
     account_ids = [a.id for a in accounts]
 
     txn_result = await db.execute(
-        select(Transaction.account_id, Transaction.amount, Transaction.type, Transaction.date, Transaction.paired_transaction_id)
+        select(Transaction.account_id, Transaction.amount, Transaction.type, Transaction.date)
         .where(
             Transaction.deleted_at == None,
             Transaction.date >= oldest_cutoff,
@@ -118,9 +118,6 @@ async def get_balance_history(
             for txn in account_txns:
                 if txn.date > date_point:
                     if txn.type == TransactionType.income:
-                        adjustment -= float(txn.amount)
-                    elif txn.type == TransactionType.transfer and txn.paired_transaction_id is not None:
-                        # Destination (incoming) transfer — undo like income
                         adjustment -= float(txn.amount)
                     else:
                         adjustment += float(txn.amount)
@@ -285,25 +282,14 @@ async def _create_balance_adjustment(
 
 
 async def _get_transaction_sum(account_id: uuid.UUID, db: AsyncSession) -> Decimal:
-    """Sum all non-deleted transactions for an account applying sign convention:
-    income → +amount, expense → -amount, transfer source → -amount,
-    transfer destination (paired_transaction_id set) → +amount."""
+    """Sum all non-deleted transactions for an account: income → +amount, else → -amount."""
     result = await db.execute(
         select(
             func.coalesce(
                 func.sum(
                     case(
                         (Transaction.type == TransactionType.income, Transaction.amount),
-                        (Transaction.type == TransactionType.expense, -Transaction.amount),
-                        (
-                            and_(
-                                Transaction.type == TransactionType.transfer,
-                                Transaction.paired_transaction_id != None,
-                            ),
-                            Transaction.amount,
-                        ),
-                        (Transaction.type == TransactionType.transfer, -Transaction.amount),
-                        else_=Decimal("0"),
+                        else_=-Transaction.amount,
                     )
                 ),
                 Decimal("0"),

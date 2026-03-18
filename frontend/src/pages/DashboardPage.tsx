@@ -571,6 +571,7 @@ export default function DashboardPage() {
       category_name?: string;
       account_name?: string;
       account_color?: string;
+      transfer_account_id?: string | null;
       type: string;
       amount: number;
     }>;
@@ -987,10 +988,11 @@ export default function DashboardPage() {
                       <span
                         className={cn(
                           "text-sm font-semibold",
+                          tx.transfer_account_id ? "text-foreground" :
                           tx.type === "income" ? "text-emerald-600" : "text-destructive"
                         )}
                       >
-                        {tx.type === "income" ? "+" : "-"}
+                        {tx.transfer_account_id ? "" : tx.type === "income" ? "+" : "-"}
                         {formatCurrency(tx.amount)}
                       </span>
                       <Button
