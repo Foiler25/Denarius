@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, case
+from sqlalchemy import and_, select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
@@ -94,7 +94,7 @@ async def get_balance_history(
     account_ids = [a.id for a in accounts]
 
     txn_result = await db.execute(
-        select(Transaction.account_id, Transaction.amount, Transaction.type, Transaction.date)
+        select(Transaction.account_id, Transaction.amount, Transaction.type, Transaction.date, Transaction.paired_transaction_id)
         .where(
             Transaction.deleted_at == None,
             Transaction.date >= oldest_cutoff,
@@ -118,6 +118,9 @@ async def get_balance_history(
             for txn in account_txns:
                 if txn.date > date_point:
                     if txn.type == TransactionType.income:
+                        adjustment -= float(txn.amount)
+                    elif txn.type == TransactionType.transfer and txn.paired_transaction_id is not None:
+                        # Destination (incoming) transfer — undo like income
                         adjustment -= float(txn.amount)
                     else:
                         adjustment += float(txn.amount)
@@ -157,11 +160,10 @@ async def update_account(
 ):
     account = await _get_or_404(account_id, db)
     updates = data.model_dump(exclude_unset=True)
-    # If current_balance is being explicitly set, recompute initial_balance so that
-    # the invariant (initial_balance + sum(transactions) == current_balance) holds.
     if "current_balance" in updates:
-        txn_sum = await _get_transaction_sum(account_id, db)
-        updates["initial_balance"] = updates["current_balance"] - txn_sum
+        await _create_balance_adjustment(
+            account, Decimal(str(updates.pop("current_balance"))), current_user.id, db
+        )
     for field, value in updates.items():
         setattr(account, field, value)
     await db.commit()
@@ -210,9 +212,7 @@ async def update_balance(
     current_user: User = Depends(get_current_user),
 ):
     account = await _get_or_404(account_id, db)
-    txn_sum = await _get_transaction_sum(account_id, db)
-    account.initial_balance = data.balance - txn_sum
-    account.current_balance = data.balance
+    await _create_balance_adjustment(account, data.balance, current_user.id, db)
     await db.commit()
     await db.refresh(account)
     return account
@@ -244,7 +244,7 @@ async def get_account_transactions(
 ):
     await _get_or_404(account_id, db)
     offset = (page - 1) * limit
-    base = select(Transaction).where(Transaction.account_id == account_id, Transaction.deleted_at == None)
+    base = select(Transaction).where(Transaction.account_id == account_id, Transaction.deleted_at == None, Transaction.is_hidden != True)
     total_result = await db.execute(select(func.count()).select_from(base.subquery()))
     total = total_result.scalar()
     result = await db.execute(base.order_by(Transaction.date.desc()).offset(offset).limit(limit))
@@ -262,9 +262,32 @@ async def _get_or_404(account_id: uuid.UUID, db: AsyncSession) -> Account:
     return account
 
 
+async def _create_balance_adjustment(
+    account: Account, desired_balance: Decimal, user_id: uuid.UUID, db: AsyncSession
+) -> None:
+    """Create a hidden adjustment transaction to reconcile account balance."""
+    delta = desired_balance - account.current_balance
+    if delta == 0:
+        return
+    today = await get_app_date(db)
+    txn_type = TransactionType.income if delta > 0 else TransactionType.expense
+    adjustment_txn = Transaction(
+        account_id=account.id,
+        amount=abs(delta),
+        type=txn_type,
+        is_hidden=True,
+        description="Balance adjustment",
+        date=today,
+        created_by=user_id,
+    )
+    db.add(adjustment_txn)
+    account.current_balance = desired_balance
+
+
 async def _get_transaction_sum(account_id: uuid.UUID, db: AsyncSession) -> Decimal:
     """Sum all non-deleted transactions for an account applying sign convention:
-    income → +amount, expense → -amount, transfer (source leg) → -amount."""
+    income → +amount, expense → -amount, transfer source → -amount,
+    transfer destination (paired_transaction_id set) → +amount."""
     result = await db.execute(
         select(
             func.coalesce(
@@ -272,6 +295,13 @@ async def _get_transaction_sum(account_id: uuid.UUID, db: AsyncSession) -> Decim
                     case(
                         (Transaction.type == TransactionType.income, Transaction.amount),
                         (Transaction.type == TransactionType.expense, -Transaction.amount),
+                        (
+                            and_(
+                                Transaction.type == TransactionType.transfer,
+                                Transaction.paired_transaction_id != None,
+                            ),
+                            Transaction.amount,
+                        ),
                         (Transaction.type == TransactionType.transfer, -Transaction.amount),
                         else_=Decimal("0"),
                     )

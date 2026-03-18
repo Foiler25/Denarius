@@ -153,6 +153,7 @@ async def create_transaction(
                     account_id=data.transfer_account_id,
                     category_id=data.category_id,
                     transfer_account_id=data.account_id,
+                    paired_transaction_id=txn.id,
                     amount=data.amount,
                     type=TransactionType.transfer,
                     description=data.description,
