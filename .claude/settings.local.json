@@ -1,83 +1,37 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(wc -l /Users/loofa/Documents/Denarius/frontend/src/pages/*.tsx /Users/loofa/Documents/Denarius/frontend/src/pages/settings/*.tsx)",
-      "Bash(docker compose down -v)",
-      "Bash(docker compose up -d)",
-      "Bash(docker compose up --build -d backup-cron)",
-      "Bash(docker exec denarius-backend-1 pip show bcrypt passlib)",
-      "Bash(docker restart denarius-backend-1)",
-      "Bash(curl -s -X POST http://localhost:9723/api/v1/auth/login -H \"Content-Type: application/json\" -d '{\"\"username\"\":\"\"admin\"\",\"\"password\"\":\"\"admin\"\"}')",
-      "Bash(docker exec denarius-postgres-1 psql -U postgres -d denarius -c \"SELECT username, role FROM users LIMIT 5;\")",
-      "Bash(docker exec denarius-postgres-1 psql -U denarius -d denarius -c \"SELECT id, username, role FROM users LIMIT 5;\")",
-      "Bash(# Try to log in with common passwords or look for user setup cat /Users/loofa/Documents/Denarius/backend/app/routers/users.py)",
-      "Bash(docker exec denarius-backend-1 python3 -c \":*)",
-      "Bash(docker exec:*)",
-      "Bash(docker compose build backend)",
-      "Bash(docker compose up -d backend)",
-      "Bash(docker compose build frontend)",
-      "Bash(docker compose up -d frontend)",
-      "Bash(curl -s http://localhost:9723/api/v1/system/health)",
-      "Bash(pip install PyPDF2==3.0.1 openpyxl==3.1.5)",
-      "Bash(npx tsc --noEmit)",
-      "Bash(docker compose exec db psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
-      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT enum_range\\(NULL::account_type\\);\")",
-      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT * FROM alembic_version;\")",
-      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"ALTER TYPE account_type ADD VALUE ''property'';\")",
-      "Bash(docker compose exec backend pip show alembic)",
-      "Bash(docker compose restart backend)",
-      "Bash(xargs ls -lh)",
-      "Bash(docker compose exec db psql -U denarius -d denarius -c \"UPDATE users SET role = ''admin'' WHERE deleted_at IS NULL AND is_active = true RETURNING id, username, email, role;\")",
-      "Bash(psql -U denarius -d denarius -h localhost -p 5432 -c \"UPDATE users SET role = ''admin'' WHERE deleted_at IS NULL AND is_active = true RETURNING id, username, email, role;\")",
-      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"UPDATE users SET role = ''admin'' WHERE deleted_at IS NULL AND is_active = true RETURNING id, username, email, role;\")",
-      "Bash(docker compose exec postgres psql -U denarius -d denarius -c \"SELECT id, username, email, role, is_active, deleted_at FROM users;\")",
-      "Bash(/Users/loofa/Documents/Denarius/backend/app/schemas/mortgage.py:*)",
-      "Bash(ls -1 backend/app/schemas/*.py)",
-      "Bash(docker compose logs postgres --tail=30)",
-      "Bash(docker compose logs backend --tail=40)",
-      "Bash(docker compose ps)",
-      "Bash(docker compose logs backend --tail=50)",
-      "Bash(docker compose config --services)",
-      "Bash(docker compose logs config-init)",
-      "Bash(docker inspect denarius-backend-1 --format '{{.RestartCount}} restarts, State: {{.State.Status}}, ExitCode: {{.State.ExitCode}}')",
-      "Bash(python3 -c \"import cairosvg\")",
-      "Bash(npx --yes svgexport --version)",
-      "Bash(node -e \"const {execSync} = require\\(''child_process''\\); execSync\\(''npx --yes @resvg/resvg-js --version'', {stdio: ''inherit''}\\)\")",
-      "Bash(qlmanage -t -s 512 -o /tmp/ /Users/loofa/Documents/Denarius/frontend/public/favicon.svg)",
-      "Read(//private/tmp/**)",
-      "Read(//Users/loofa/.claude/**)",
-      "Read(//Users/loofa/.config/claude/**)",
-      "mcp__pharaoh__get_codebase_map",
-      "mcp__pharaoh__request_upload",
-      "Bash(docker compose logs backend --tail=5)",
-      "Bash(docker compose logs backend --since 5m)",
-      "Bash(docker compose logs backend --since 2m)",
-      "Bash(docker compose logs backend --since 3m)",
-      "Bash(docker compose logs backend --since 10m)",
-      "Bash(curl -s http://localhost:9723/api/docs/openapi.json)",
-      "Bash(python3 -c \"import json,sys; spec=json.load\\(sys.stdin\\); mp=spec.get\\(''components'',{}\\).get\\(''schemas'',{}\\).get\\(''MarkPaidRequest'',{}\\); print\\(json.dumps\\(mp, indent=2\\)\\)\")",
-      "Bash(python3 -c \" import json,sys spec=json.load\\(sys.stdin\\) schemas=spec.get\\(''components'',{}\\).get\\(''schemas'',{}\\) for k in schemas: if ''Paid'' in k or ''paid'' in k or ''Mark'' in k or ''mark'' in k or ''Recurring'' in k: print\\(k, '':'', json.dumps\\(schemas[k].get\\(''properties'',{}\\), indent=2\\)\\) \")",
-      "Bash(curl -sv http://localhost:9723/api/v1/recurring/2b58e9af-ccdb-47fd-9222-f18e675e403d/mark-paid -X POST -H \"Content-Type: application/json\" -d '{\"\"date\"\":\"\"2026-03-09\"\",\"\"amount\"\":100}')",
-      "Bash(docker compose logs backend --since 15m)",
-      "Bash(docker compose exec backend python3 -c \":*)",
-      "Bash(grep -r \"over_budget\\\\|over-budget\\\\|dismissed\\\\|dismiss\" /Users/loofa/Documents/Denarius/frontend/src/ --include=*.tsx --include=*.ts)",
-      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
-      "Bash(sed -i '' 's/max-h-\\\\[85vh\\\\]/max-h-[calc\\(100svh-2rem\\)]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)",
-      "Bash(grep -l \"max-h-\\\\[calc\\(100svh-2rem\\)\\\\]\" *.tsx)",
-      "Bash(perl -i -pe 's/h-\\\\[calc\\\\\\(100svh-2rem\\\\\\)\\\\] sm:h-auto sm:max-h-\\\\[85vh\\\\]/top-4 bottom-4 translate-y-0 sm:bottom-auto sm:top-[50svh] sm:-translate-y-1\\\\/2 sm:max-h-[85vh]/g' TransactionsPage.tsx DashboardPage.tsx RecurringPage.tsx AccountsPage.tsx MortgagePage.tsx CategoriesPage.tsx ExpenseAccountsPage.tsx BudgetsPage.tsx)",
-      "Bash(npx tsc:*)",
-      "Bash(find /Users/loofa/Documents/Denarius/frontend/src/components/dashboard -type f -name *.tsx)",
-      "Bash(python -c \"from app.routers import transactions, accounts, dashboard, reports; print\\(''OK''\\)\")",
-      "Bash(python3 -c \"from app.routers import transactions, accounts, dashboard, reports; print\\(''OK''\\)\")",
-      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/transactions.py)",
-      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/accounts.py)",
-      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/dashboard.py)",
-      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/app/routers/reports.py)",
-      "Bash(python3 -m py_compile /Users/loofa/Documents/Denarius/backend/alembic/versions/0022_transfers_as_expense_income.py)"
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"/Users/loofa/Documents/Denarius/.dual-graph/prime.sh\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"/Users/loofa/Documents/Denarius/.dual-graph/prime.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/bash \"/Users/loofa/Documents/Denarius/.dual-graph/stop.sh\""
+          }
+        ]
+      }
     ]
-  },
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    ""
-  ]
+  }
 }

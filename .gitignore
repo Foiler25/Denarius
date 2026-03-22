@@ -16,3 +16,4 @@ startup-shutdown
 .claude/
 .gemini/
 .grepai/
+.dual-graph/
