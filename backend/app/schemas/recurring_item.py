@@ -81,3 +81,13 @@ class MarkPaidRequest(BaseModel):
 class MarkPaidNoTransactionRequest(BaseModel):
     date: Optional[Date] = None
     amount: Optional[Decimal] = None
+
+
+class RecurringSummaryOut(BaseModel):
+    """Summary of actual paid amounts for recurring items in the current month."""
+    subscriptions_paid: float
+    subscriptions_count: int
+    bills_paid: float
+    bills_count: int
+    income_paid: float
+    income_count: int

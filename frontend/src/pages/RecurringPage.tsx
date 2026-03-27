@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   useRecurring,
+  useRecurringSummary,
   useCreateRecurring,
   useUpdateRecurring,
   useDeleteRecurring,
@@ -168,6 +169,7 @@ function countPaidOccurrencesInMonth(item: RecurringItem, year: number, month: n
 
 function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "income" }) {
   const { data: items = [] } = useRecurring(type);
+  const { data: summary } = useRecurringSummary();
   const activeItems = (items as RecurringItem[]).filter((i) => i.is_active);
 
   const now = new Date();
@@ -176,12 +178,22 @@ function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "incom
 
   const totalOccurrences = activeItems.reduce((sum, i) => sum + countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
   const totalAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
-  const paidOccurrences = activeItems.reduce((sum, i) => sum + countPaidOccurrencesInMonth(i, year, month), 0);
-  const paidAmount = activeItems.reduce((sum, i) => {
-    const count = countPaidOccurrencesInMonth(i, year, month);
-    if (count === 0) return sum;
-    return sum + Number(i.last_paid_amount ?? i.amount) * count;
-  }, 0);
+
+  // Get actual paid amount from summary endpoint (based on real transactions)
+  let paidAmount = 0;
+  let paidCount = 0;
+  if (summary) {
+    if (type === "subscription") {
+      paidAmount = summary.subscriptions_paid;
+      paidCount = summary.subscriptions_count;
+    } else if (type === "bill") {
+      paidAmount = summary.bills_paid;
+      paidCount = summary.bills_count;
+    } else if (type === "income") {
+      paidAmount = summary.income_paid;
+      paidCount = summary.income_count;
+    }
+  }
 
   const paidPct = totalAmount > 0 ? Math.min(100, (paidAmount / totalAmount) * 100) : 0;
   const allPaid = totalAmount > 0 && paidPct >= 100;
@@ -202,7 +214,7 @@ function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "incom
           {formatCurrency(paidAmount)}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {paidOccurrences} of {totalOccurrences} {actionLabel} · of {formatCurrency(totalAmount)}/mo
+          {paidCount} of {totalOccurrences} {actionLabel} · of {formatCurrency(totalAmount)}/mo
         </p>
         <div className="mt-2 h-1.5 w-full bg-muted rounded-full">
           <div

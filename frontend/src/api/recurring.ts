@@ -84,6 +84,7 @@ export function useMarkPaid() {
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["mortgage"] });
+      qc.invalidateQueries({ queryKey: ["recurring", "summary"] });
     },
   });
 }
@@ -96,6 +97,23 @@ export function useMarkPaidNoTransaction() {
     onSuccess: (updatedItem) => {
       patchRecurringItem(qc, updatedItem);
       qc.invalidateQueries({ queryKey: ["recurring"] });
+      qc.invalidateQueries({ queryKey: ["recurring", "summary"] });
     },
+  });
+}
+
+export interface RecurringSummary {
+  subscriptions_paid: number;
+  subscriptions_count: number;
+  bills_paid: number;
+  bills_count: number;
+  income_paid: number;
+  income_count: number;
+}
+
+export function useRecurringSummary() {
+  return useQuery({
+    queryKey: ["recurring", "summary"],
+    queryFn: () => api.get("/recurring/summary").then((r) => r.data as RecurringSummary),
   });
 }
