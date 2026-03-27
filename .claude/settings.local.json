@@ -1,4 +1,13 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__dual-graph__graph_continue",
+      "mcp__dual-graph__graph_scan",
+      "mcp__dual-graph__graph_read",
+      "Bash(grep -l \"recurring_item_id\" /Users/loofa/Documents/Denarius/backend/alembic/versions/*.py)",
+      "Bash(git show:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

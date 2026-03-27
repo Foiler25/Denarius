@@ -4,7 +4,7 @@ from typing import Optional
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
@@ -53,7 +53,6 @@ async def upcoming_recurring(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from datetime import timedelta
     today = await get_app_date(db)
     cutoff = today + timedelta(days=days)
     result = await db.execute(
@@ -66,6 +65,94 @@ async def upcoming_recurring(
         .order_by(RecurringItem.next_due_date)
     )
     return [_with_days_until_due(item, today) for item in result.scalars().all()]
+
+
+@router.get("/summary", response_model=RecurringSummaryOut)
+async def get_recurring_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get summary of actual amounts paid for subscriptions, bills, and income in the current month.
+    Uses actual transaction amounts, with fallback for items paid without a transaction.
+    """
+    today = await get_app_date(db)
+    month_start = today.replace(day=1)
+
+    # Get all transactions linked to recurring items in the current month
+    result = await db.execute(
+        select(Transaction).where(
+            Transaction.recurring_item_id != None,
+            Transaction.deleted_at == None,
+            Transaction.date >= month_start,
+            Transaction.date <= today,
+        )
+    )
+    transactions = result.scalars().all()
+
+    # Get active recurring items to map transaction to type
+    recurring_items_result = await db.execute(
+        select(RecurringItem).where(
+            RecurringItem.deleted_at == None,
+            RecurringItem.is_active == True,
+        )
+    )
+    recurring_items = {item.id: item for item in recurring_items_result.scalars().all()}
+
+    # Calculate totals by type
+    subscriptions_paid = Decimal("0")
+    subscriptions_count = 0
+    bills_paid = Decimal("0")
+    bills_count = 0
+    income_paid = Decimal("0")
+    income_count = 0
+
+    counted_item_ids: set[uuid.UUID] = set()
+
+    for txn in transactions:
+        item = recurring_items.get(txn.recurring_item_id)
+        if not item:
+            continue
+
+        counted_item_ids.add(item.id)
+        amount = abs(txn.amount)
+        if item.type == RecurringType.subscription:
+            subscriptions_paid += amount
+            subscriptions_count += 1
+        elif item.type == RecurringType.bill:
+            bills_paid += amount
+            bills_count += 1
+        elif item.type == RecurringType.income:
+            income_paid += amount
+            income_count += 1
+
+    # Fallback: include items paid via mark_paid_no_transaction (no Transaction created)
+    for item in recurring_items.values():
+        if item.id in counted_item_ids:
+            continue
+        if not item.last_paid_date:
+            continue
+        if item.last_paid_date < month_start or item.last_paid_date > today:
+            continue
+        amount = abs(item.last_paid_amount or item.amount)
+        if item.type == RecurringType.subscription:
+            subscriptions_paid += amount
+            subscriptions_count += 1
+        elif item.type == RecurringType.bill:
+            bills_paid += amount
+            bills_count += 1
+        elif item.type == RecurringType.income:
+            income_paid += amount
+            income_count += 1
+
+    return RecurringSummaryOut(
+        subscriptions_paid=float(subscriptions_paid),
+        subscriptions_count=subscriptions_count,
+        bills_paid=float(bills_paid),
+        bills_count=bills_count,
+        income_paid=float(income_paid),
+        income_count=income_count,
+    )
 
 
 async def _check_once_per_month_category(
@@ -180,67 +267,3 @@ async def _get_or_404(item_id: uuid.UUID, db: AsyncSession) -> RecurringItem:
     if not item:
         raise HTTPException(status_code=404, detail="Recurring item not found")
     return item
-
-
-@router.get("/summary", response_model=RecurringSummaryOut)
-async def get_recurring_summary(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Get summary of actual amounts paid for subscriptions, bills, and income in the current month.
-    This uses actual transaction amounts instead of the recurring item's amount field.
-    """
-    today = await get_app_date(db)
-    month_start = today.replace(day=1)
-    month_end = (month_start.replace(month=month_start.month + 1) if month_start.month < 12 else month_start.replace(year=today.year + 1, month=1)) - timedelta(days=1)
-
-    # Get all transactions linked to recurring items in the current month
-    result = await db.execute(
-        select(Transaction).where(
-            Transaction.recurring_item_id != None,
-            Transaction.deleted_at == None,
-            Transaction.date >= month_start,
-            Transaction.date <= today,
-        )
-    )
-    transactions = result.scalars().all()
-
-    # Get recurring items to map transaction to type
-    recurring_items_result = await db.execute(
-        select(RecurringItem).where(RecurringItem.deleted_at == None)
-    )
-    recurring_items = {item.id: item for item in recurring_items_result.scalars().all()}
-
-    # Calculate totals by type
-    subscriptions_paid = Decimal("0")
-    subscriptions_count = 0
-    bills_paid = Decimal("0")
-    bills_count = 0
-    income_paid = Decimal("0")
-    income_count = 0
-
-    for txn in transactions:
-        item = recurring_items.get(txn.recurring_item_id)
-        if not item:
-            continue
-
-        amount = abs(txn.amount)
-        if item.type == RecurringType.subscription:
-            subscriptions_paid += amount
-            subscriptions_count += 1
-        elif item.type == RecurringType.bill:
-            bills_paid += amount
-            bills_count += 1
-        elif item.type == RecurringType.income:
-            income_paid += amount
-            income_count += 1
-
-    return RecurringSummaryOut(
-        subscriptions_paid=float(subscriptions_paid),
-        subscriptions_count=subscriptions_count,
-        bills_paid=float(bills_paid),
-        bills_count=bills_count,
-        income_paid=float(income_paid),
-        income_count=income_count,
-    )

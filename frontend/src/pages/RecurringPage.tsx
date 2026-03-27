@@ -141,32 +141,6 @@ function countOccurrencesInMonth(nextDueDateStr: string, frequency: string, year
   return count;
 }
 
-function countPaidOccurrencesInMonth(item: RecurringItem, year: number, month: number): number {
-  if (!item.last_paid_date) return 0;
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
-  const lastPaid = new Date(item.last_paid_date + "T12:00:00");
-  if (lastPaid < monthStart) return 0;
-
-  if (item.frequency === "monthly") return item.is_paid_current_period ? 1 : 0;
-
-  if (item.frequency === "quarterly" || item.frequency === "annually") {
-    const total = countOccurrencesInMonth(item.next_due_date, item.frequency, year, month);
-    return total > 0 && item.is_paid_current_period ? 1 : 0;
-  }
-
-  // weekly or biweekly
-  const intervalMs = (item.frequency === "weekly" ? 7 : 14) * 86400000;
-  let d = new Date(item.next_due_date + "T12:00:00");
-  while (d > monthEnd) d = new Date(d.getTime() - intervalMs);
-  let count = 0;
-  while (d >= monthStart) {
-    if (d <= lastPaid) count++;
-    d = new Date(d.getTime() - intervalMs);
-  }
-  return count;
-}
-
 function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "income" }) {
   const { data: items = [] } = useRecurring(type);
   const { data: summary } = useRecurringSummary();
