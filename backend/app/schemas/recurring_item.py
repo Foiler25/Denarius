@@ -84,10 +84,16 @@ class MarkPaidNoTransactionRequest(BaseModel):
 
 
 class RecurringSummaryOut(BaseModel):
-    """Summary of actual paid amounts for recurring items in the current month."""
+    """Summary of paid and expected amounts for recurring items in the current month."""
     subscriptions_paid: float
     subscriptions_count: int
+    subscriptions_expected: float
+    subscriptions_total: int
     bills_paid: float
     bills_count: int
+    bills_expected: float
+    bills_total: int
     income_paid: float
     income_count: int
+    income_expected: float
+    income_total: int

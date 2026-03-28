@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
 from app.models.category import Category
-from app.models.recurring_item import RecurringItem, RecurringType
+from app.models.recurring_item import RecurringFrequency, RecurringItem, RecurringType
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.routers.system import get_app_date
@@ -67,17 +67,46 @@ async def upcoming_recurring(
     return [_with_days_until_due(item, today) for item in result.scalars().all()]
 
 
+def _count_occurrences_in_month(item: RecurringItem, month_start: date, month_end: date) -> int:
+    """Count how many times this item occurs in the given month."""
+    freq = item.frequency
+    if freq == RecurringFrequency.monthly:
+        return 1
+    if freq in (RecurringFrequency.quarterly, RecurringFrequency.annually):
+        # Check if next_due_date is in this month
+        if item.next_due_date and month_start <= item.next_due_date <= month_end:
+            return 1
+        # If already paid, next_due_date advanced past this month — check previous period
+        prev = rewind_by_frequency(item.next_due_date, freq)
+        if month_start <= prev <= month_end:
+            return 1
+        return 0
+    # weekly / biweekly — walk backwards from past month_end to count all dates in the month
+    interval = timedelta(days=7 if freq == RecurringFrequency.weekly else 14)
+    d = item.next_due_date
+    while d <= month_end:
+        d += interval
+    count = 0
+    d -= interval
+    while d >= month_start:
+        count += 1
+        d -= interval
+    return count
+
+
 @router.get("/summary", response_model=RecurringSummaryOut)
 async def get_recurring_summary(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Get summary of actual amounts paid for subscriptions, bills, and income in the current month.
-    Uses actual transaction amounts, with fallback for items paid without a transaction.
+    Get summary of paid and expected amounts for recurring items in the current month.
+    Uses actual transaction amounts for paid items, configured amounts for unpaid items.
     """
     today = await get_app_date(db)
     month_start = today.replace(day=1)
+    month_end = (month_start.replace(month=month_start.month + 1) if month_start.month < 12
+                 else month_start.replace(year=today.year + 1, month=1)) - timedelta(days=1)
 
     # Get all transactions linked to recurring items in the current month
     result = await db.execute(
@@ -90,68 +119,64 @@ async def get_recurring_summary(
     )
     transactions = result.scalars().all()
 
-    # Get active recurring items to map transaction to type
+    # Group transactions by recurring item
+    item_txns: dict[uuid.UUID, list[Transaction]] = {}
+    for txn in transactions:
+        item_txns.setdefault(txn.recurring_item_id, []).append(txn)
+
+    # Get active recurring items
     recurring_items_result = await db.execute(
         select(RecurringItem).where(
             RecurringItem.deleted_at == None,
             RecurringItem.is_active == True,
         )
     )
-    recurring_items = {item.id: item for item in recurring_items_result.scalars().all()}
 
-    # Calculate totals by type
-    subscriptions_paid = Decimal("0")
-    subscriptions_count = 0
-    bills_paid = Decimal("0")
-    bills_count = 0
-    income_paid = Decimal("0")
-    income_count = 0
+    # Accumulate per-type totals
+    totals: dict[str, dict[str, Decimal | int]] = {
+        t: {"paid": Decimal("0"), "paid_count": 0, "expected": Decimal("0"), "total": 0}
+        for t in ("subscription", "bill", "income")
+    }
 
-    counted_item_ids: set[uuid.UUID] = set()
-
-    for txn in transactions:
-        item = recurring_items.get(txn.recurring_item_id)
-        if not item:
+    for item in recurring_items_result.scalars().all():
+        t = totals.get(item.type.value)
+        if not t:
             continue
 
-        counted_item_ids.add(item.id)
-        amount = abs(txn.amount)
-        if item.type == RecurringType.subscription:
-            subscriptions_paid += amount
-            subscriptions_count += 1
-        elif item.type == RecurringType.bill:
-            bills_paid += amount
-            bills_count += 1
-        elif item.type == RecurringType.income:
-            income_paid += amount
-            income_count += 1
+        txns = item_txns.pop(item.id, [])
+        paid_amount = sum(abs(txn.amount) for txn in txns)
+        paid_count = len(txns)
 
-    # Fallback: include items paid via mark_paid_no_transaction (no Transaction created)
-    for item in recurring_items.values():
-        if item.id in counted_item_ids:
-            continue
-        if not item.last_paid_date:
-            continue
-        if item.last_paid_date < month_start or item.last_paid_date > today:
-            continue
-        amount = abs(item.last_paid_amount or item.amount)
-        if item.type == RecurringType.subscription:
-            subscriptions_paid += amount
-            subscriptions_count += 1
-        elif item.type == RecurringType.bill:
-            bills_paid += amount
-            bills_count += 1
-        elif item.type == RecurringType.income:
-            income_paid += amount
-            income_count += 1
+        # Fallback: mark_paid_no_transaction (no Transaction created)
+        if paid_count == 0 and item.last_paid_date and month_start <= item.last_paid_date <= today:
+            paid_amount = abs(item.last_paid_amount or item.amount)
+            paid_count = 1
+
+        total_occ = _count_occurrences_in_month(item, month_start, month_end)
+        # Paid items may have advanced next_due_date out of this month — ensure we count them
+        total_occ = max(total_occ, paid_count)
+
+        remaining = total_occ - paid_count
+        expected = paid_amount + abs(item.amount) * remaining
+
+        t["paid"] += paid_amount
+        t["paid_count"] += paid_count
+        t["expected"] += expected
+        t["total"] += total_occ
 
     return RecurringSummaryOut(
-        subscriptions_paid=float(subscriptions_paid),
-        subscriptions_count=subscriptions_count,
-        bills_paid=float(bills_paid),
-        bills_count=bills_count,
-        income_paid=float(income_paid),
-        income_count=income_count,
+        subscriptions_paid=float(totals["subscription"]["paid"]),
+        subscriptions_count=int(totals["subscription"]["paid_count"]),
+        subscriptions_expected=float(totals["subscription"]["expected"]),
+        subscriptions_total=int(totals["subscription"]["total"]),
+        bills_paid=float(totals["bill"]["paid"]),
+        bills_count=int(totals["bill"]["paid_count"]),
+        bills_expected=float(totals["bill"]["expected"]),
+        bills_total=int(totals["bill"]["total"]),
+        income_paid=float(totals["income"]["paid"]),
+        income_count=int(totals["income"]["paid_count"]),
+        income_expected=float(totals["income"]["expected"]),
+        income_total=int(totals["income"]["total"]),
     )
 
 

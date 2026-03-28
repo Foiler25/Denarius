@@ -105,10 +105,16 @@ export function useMarkPaidNoTransaction() {
 export interface RecurringSummary {
   subscriptions_paid: number;
   subscriptions_count: number;
+  subscriptions_expected: number;
+  subscriptions_total: number;
   bills_paid: number;
   bills_count: number;
+  bills_expected: number;
+  bills_total: number;
   income_paid: number;
   income_count: number;
+  income_expected: number;
+  income_total: number;
 }
 
 export function useRecurringSummary() {

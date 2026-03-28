@@ -114,60 +114,16 @@ const SUMMARY_LABELS: Record<string, string> = {
   income: "Income",
 };
 
-function countOccurrencesInMonth(nextDueDateStr: string, frequency: string, year: number, month: number): number {
-  const monthStart = new Date(year, month, 1);
-  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
-
-  if (frequency === "monthly") return 1;
-
-  if (frequency === "quarterly" || frequency === "annually") {
-    const intervalMonths = frequency === "quarterly" ? 3 : 12;
-    let d = new Date(nextDueDateStr + "T12:00:00");
-    while (d > monthEnd) {
-      d = new Date(d.getFullYear(), d.getMonth() - intervalMonths, d.getDate(), 12);
-    }
-    return d >= monthStart ? 1 : 0;
-  }
-
-  // weekly or biweekly — fixed day intervals
-  const intervalMs = (frequency === "weekly" ? 7 : 14) * 86400000;
-  let d = new Date(nextDueDateStr + "T12:00:00");
-  while (d > monthEnd) d = new Date(d.getTime() - intervalMs);
-  let count = 0;
-  while (d >= monthStart) {
-    count++;
-    d = new Date(d.getTime() - intervalMs);
-  }
-  return count;
-}
-
 function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "income" }) {
-  const { data: items = [] } = useRecurring(type);
   const { data: summary } = useRecurringSummary();
-  const activeItems = (items as RecurringItem[]).filter((i) => i.is_active);
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  if (!summary) return null;
 
-  const totalOccurrences = activeItems.reduce((sum, i) => sum + countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
-  const totalAmount = activeItems.reduce((sum, i) => sum + Number(i.amount) * countOccurrencesInMonth(i.next_due_date, i.frequency, year, month), 0);
-
-  // Get actual paid amount from summary endpoint (based on real transactions)
-  let paidAmount = 0;
-  let paidCount = 0;
-  if (summary) {
-    if (type === "subscription") {
-      paidAmount = summary.subscriptions_paid;
-      paidCount = summary.subscriptions_count;
-    } else if (type === "bill") {
-      paidAmount = summary.bills_paid;
-      paidCount = summary.bills_count;
-    } else if (type === "income") {
-      paidAmount = summary.income_paid;
-      paidCount = summary.income_count;
-    }
-  }
+  const prefix = type === "subscription" ? "subscriptions" : type === "bill" ? "bills" : "income";
+  const paidAmount = summary[`${prefix}_paid` as keyof typeof summary] as number;
+  const paidCount = summary[`${prefix}_count` as keyof typeof summary] as number;
+  const totalAmount = summary[`${prefix}_expected` as keyof typeof summary] as number;
+  const totalOccurrences = summary[`${prefix}_total` as keyof typeof summary] as number;
 
   const paidPct = totalAmount > 0 ? Math.min(100, (paidAmount / totalAmount) * 100) : 0;
   const allPaid = totalAmount > 0 && paidPct >= 100;
@@ -188,7 +144,7 @@ function RecurringSummaryCard({ type }: { type: "subscription" | "bill" | "incom
           {formatCurrency(paidAmount)}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          {paidCount} of {totalOccurrences} {actionLabel} · of {formatCurrency(totalAmount)}/mo
+          {paidCount} of {totalOccurrences} {actionLabel} · {formatCurrency(totalAmount)}/mo expected
         </p>
         <div className="mt-2 h-1.5 w-full bg-muted rounded-full">
           <div
