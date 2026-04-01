@@ -310,8 +310,29 @@ async def copy_month(
             b = Budget(category_id=src.category_id, month=to_month, amount=src.amount)
             db.add(b)
         created.append(b)
+
+    # Copy monthly target if source has one and target doesn't
+    source_target = await db.execute(
+        select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == from_month)
+    )
+    src_target = source_target.scalar_one_or_none()
+    if src_target:
+        existing_target = await db.execute(
+            select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == to_month)
+        )
+        if not existing_target.scalar_one_or_none():
+            db.add(MonthlyBudgetTotal(month=to_month, amount=src_target.amount))
+
     await db.commit()
-    return created
+
+    # Re-fetch with category relationship eagerly loaded (async SQLAlchemy cannot lazy-load)
+    ids = [b.id for b in created]
+    if ids:
+        result = await db.execute(
+            select(Budget).options(selectinload(Budget.category)).where(Budget.id.in_(ids))
+        )
+        return result.scalars().all()
+    return []
 
 
 async def _get_or_404(budget_id: uuid.UUID, db: AsyncSession) -> Budget:
