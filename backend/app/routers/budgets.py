@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_current_user, get_db
+from app.models.account import Account, AccountType
 from app.models.app_setting import AppSetting
 from app.models.budget import Budget
 from app.routers.system import get_app_date
@@ -53,12 +54,15 @@ async def _budgets_with_spent(month: date, db: AsyncSession) -> list[BudgetWithS
     for b in budgets:
         spent_result = await db.execute(
             select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+            .join(Account, Transaction.account_id == Account.id)
             .where(
                 Transaction.category_id == b.category_id,
                 Transaction.type == TransactionType.expense,
                 Transaction.date >= month_start,
                 Transaction.date < month_end,
                 Transaction.deleted_at == None,
+                Transaction.transfer_account_id == None,
+                Account.type.not_in([AccountType.mortgage, AccountType.loan]),
             )
         )
         actual_spent = spent_result.scalar() or Decimal("0")
@@ -129,12 +133,15 @@ async def budget_summary(
     # Non-recurring expense spending for the month (excludes bills/recurring items)
     total_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.date >= month_start,
             Transaction.date < month_end,
             Transaction.deleted_at == None,
             Transaction.recurring_item_id == None,
+            Transaction.transfer_account_id == None,
+            Account.type.not_in([AccountType.mortgage, AccountType.loan]),
         )
     )
     total_spent = float(total_result.scalar() or Decimal("0"))
@@ -147,12 +154,15 @@ async def budget_summary(
         untracked_filter = Transaction.category_id == None
     untracked_result = await db.execute(
         select(func.coalesce(func.sum(Transaction.amount), Decimal("0")))
+        .join(Account, Transaction.account_id == Account.id)
         .where(
             Transaction.type == TransactionType.expense,
             Transaction.date >= month_start,
             Transaction.date < month_end,
             Transaction.deleted_at == None,
             Transaction.recurring_item_id == None,
+            Transaction.transfer_account_id == None,
+            Account.type.not_in([AccountType.mortgage, AccountType.loan]),
             untracked_filter,
         )
     )
