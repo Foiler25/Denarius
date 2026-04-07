@@ -24,9 +24,9 @@ def _with_days_until_due(item: RecurringItem, today: date) -> RecurringOut:
     days = (item.next_due_date - today).days
     out = RecurringOut.model_validate(item)
     out.days_until_due = days
-    if item.last_paid_date is not None and item.next_due_date > today:
-        period_start = rewind_by_frequency(item.next_due_date, item.frequency)
-        out.is_paid_current_period = item.last_paid_date >= period_start
+    if item.last_paid_date is not None:
+        month_start = today.replace(day=1)
+        out.is_paid_current_period = month_start <= item.last_paid_date <= today
     return out
 
 

@@ -314,11 +314,10 @@ async def match_unlinked_current_month(item: RecurringItem, db: AsyncSession) ->
         return False
 
     today = date.today()
-    period_start = rewind_by_frequency(item.next_due_date, item.frequency)
-    if item.last_paid_date is not None and item.last_paid_date >= period_start:
+    month_start = today.replace(day=1)
+    if item.last_paid_date is not None and month_start <= item.last_paid_date <= today:
         return False
 
-    month_start = today.replace(day=1)
     result = await db.execute(
         select(Transaction).where(
             Transaction.recurring_item_id == None,
