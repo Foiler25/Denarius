@@ -131,8 +131,17 @@ async def dashboard_summary(
         .order_by(RecurringItem.next_due_date)
         .limit(10)
     )
-    from app.routers.recurring import _with_days_until_due
-    upcoming_bills = [_with_days_until_due(item, today) for item in upcoming_result.scalars().all()]
+    from app.routers.recurring import (
+        _month_bounds,
+        _paid_counts_for_month,
+        _with_days_until_due,
+    )
+    month_start, month_end = _month_bounds(today)
+    paid_counts = await _paid_counts_for_month(month_start, today, db)
+    upcoming_bills = [
+        _with_days_until_due(item, today, month_start, month_end, paid_counts)
+        for item in upcoming_result.scalars().all()
+    ]
 
     # Recent transactions
     recent_result = await db.execute(
