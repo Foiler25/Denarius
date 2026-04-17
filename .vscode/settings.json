@@ -1,0 +1,17 @@
+{
+  "files.exclude": {
+    "**/._*": true,
+    "**/.DS_Store": true,
+    "**/.AppleDouble": true,
+    "**/.Spotlight-V100": true,
+    "**/.Trashes": true
+  },
+  "files.watcherExclude": {
+    "**/._*": true,
+    "**/.DS_Store": true
+  },
+  "search.exclude": {
+    "**/._*": true,
+    "**/.DS_Store": true
+  }
+}

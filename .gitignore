@@ -17,3 +17,11 @@ startup-shutdown
 .gemini/
 .grepai/
 .dual-graph/
+
+# macOS / exFAT artifacts
+._*
+.AppleDouble
+.AppleDB
+.AppleDesktop
+.Spotlight-V100
+.Trashes
