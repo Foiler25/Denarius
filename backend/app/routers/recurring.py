@@ -4,7 +4,7 @@ from typing import Optional
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db
@@ -20,14 +20,61 @@ from app.utils.date_utils import rewind_by_frequency
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
 
-def _with_days_until_due(item: RecurringItem, today: date) -> RecurringOut:
+def _month_bounds(today: date) -> tuple[date, date]:
+    month_start = today.replace(day=1)
+    month_end = (month_start.replace(month=month_start.month + 1) if month_start.month < 12
+                 else month_start.replace(year=today.year + 1, month=1)) - timedelta(days=1)
+    return month_start, month_end
+
+
+def _with_days_until_due(
+    item: RecurringItem,
+    today: date,
+    month_start: date,
+    month_end: date,
+    paid_counts: dict[uuid.UUID, int],
+) -> RecurringOut:
     days = (item.next_due_date - today).days
     out = RecurringOut.model_validate(item)
     out.days_until_due = days
-    if item.last_paid_date is not None:
-        month_start = today.replace(day=1)
-        out.is_paid_current_period = month_start <= item.last_paid_date <= today
+
+    expected = _count_occurrences_in_month(item, month_start, month_end)
+    paid = paid_counts.get(item.id, 0)
+    # Fallback for mark_paid_no_transaction (creates no Transaction row).
+    if paid == 0 and item.last_paid_date and month_start <= item.last_paid_date <= today:
+        paid = 1
+    expected = max(expected, paid)
+
+    out.expected_payments_this_month = expected
+    out.paid_payments_this_month = paid
+    out.is_paid_current_period = expected > 0 and paid >= expected
     return out
+
+
+async def _paid_count_for(item_id: uuid.UUID, month_start: date, today: date, db: AsyncSession) -> dict[uuid.UUID, int]:
+    result = await db.execute(
+        select(func.count(Transaction.id)).where(
+            Transaction.recurring_item_id == item_id,
+            Transaction.deleted_at.is_(None),
+            Transaction.date >= month_start,
+            Transaction.date <= today,
+        )
+    )
+    return {item_id: int(result.scalar_one() or 0)}
+
+
+async def _paid_counts_for_month(month_start: date, today: date, db: AsyncSession) -> dict[uuid.UUID, int]:
+    rows = await db.execute(
+        select(Transaction.recurring_item_id, func.count(Transaction.id))
+        .where(
+            Transaction.recurring_item_id.is_not(None),
+            Transaction.deleted_at.is_(None),
+            Transaction.date >= month_start,
+            Transaction.date <= today,
+        )
+        .group_by(Transaction.recurring_item_id)
+    )
+    return {rid: int(c) for rid, c in rows.all()}
 
 
 @router.get("", response_model=list[RecurringOut])
@@ -38,13 +85,15 @@ async def list_recurring(
     current_user: User = Depends(get_current_user),
 ):
     today = await get_app_date(db)
+    month_start, month_end = _month_bounds(today)
     q = select(RecurringItem).where(RecurringItem.deleted_at == None)
     if type:
         q = q.where(RecurringItem.type == type)
     if is_active is not None:
         q = q.where(RecurringItem.is_active == is_active)
     result = await db.execute(q.order_by(RecurringItem.next_due_date))
-    return [_with_days_until_due(item, today) for item in result.scalars().all()]
+    paid_counts = await _paid_counts_for_month(month_start, today, db)
+    return [_with_days_until_due(item, today, month_start, month_end, paid_counts) for item in result.scalars().all()]
 
 
 @router.get("/upcoming", response_model=list[RecurringOut])
@@ -54,6 +103,7 @@ async def upcoming_recurring(
     current_user: User = Depends(get_current_user),
 ):
     today = await get_app_date(db)
+    month_start, month_end = _month_bounds(today)
     cutoff = today + timedelta(days=days)
     result = await db.execute(
         select(RecurringItem)
@@ -64,7 +114,8 @@ async def upcoming_recurring(
         )
         .order_by(RecurringItem.next_due_date)
     )
-    return [_with_days_until_due(item, today) for item in result.scalars().all()]
+    paid_counts = await _paid_counts_for_month(month_start, today, db)
+    return [_with_days_until_due(item, today, month_start, month_end, paid_counts) for item in result.scalars().all()]
 
 
 def _count_occurrences_in_month(item: RecurringItem, month_start: date, month_end: date) -> int:
@@ -206,6 +257,13 @@ async def _check_once_per_month_category(
         )
 
 
+async def _build_single_out(item: RecurringItem, db: AsyncSession) -> RecurringOut:
+    today = await get_app_date(db)
+    month_start, month_end = _month_bounds(today)
+    paid_counts = await _paid_count_for(item.id, month_start, today, db)
+    return _with_days_until_due(item, today, month_start, month_end, paid_counts)
+
+
 @router.post("", response_model=RecurringOut, status_code=201)
 async def create_recurring(
     data: RecurringCreate,
@@ -217,7 +275,7 @@ async def create_recurring(
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    return _with_days_until_due(item, await get_app_date(db))
+    return await _build_single_out(item, db)
 
 
 @router.get("/{item_id}", response_model=RecurringOut)
@@ -226,7 +284,8 @@ async def get_recurring(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return _with_days_until_due(await _get_or_404(item_id, db), await get_app_date(db))
+    item = await _get_or_404(item_id, db)
+    return await _build_single_out(item, db)
 
 
 @router.put("/{item_id}", response_model=RecurringOut)
@@ -244,7 +303,7 @@ async def update_recurring(
     await match_unlinked_current_month(item, db)
     await db.commit()
     await db.refresh(item)
-    return _with_days_until_due(item, await get_app_date(db))
+    return await _build_single_out(item, db)
 
 
 @router.delete("/{item_id}", status_code=204)
@@ -268,7 +327,7 @@ async def mark_paid_endpoint(
     item = await _get_or_404(item_id, db)
     await mark_paid(item, db, current_user.id, data.date, data.amount, data.description, data.account_id, data.category_id, data.source_account_id)
     await db.refresh(item)
-    return _with_days_until_due(item, await get_app_date(db))
+    return await _build_single_out(item, db)
 
 
 @router.post("/{item_id}/mark-paid-no-transaction", response_model=RecurringOut, status_code=200)
@@ -281,7 +340,7 @@ async def mark_paid_no_transaction_endpoint(
     item = await _get_or_404(item_id, db)
     await mark_paid_no_transaction(item, db, data.date, data.amount)
     await db.refresh(item)
-    return _with_days_until_due(item, await get_app_date(db))
+    return await _build_single_out(item, db)
 
 
 async def _get_or_404(item_id: uuid.UUID, db: AsyncSession) -> RecurringItem:

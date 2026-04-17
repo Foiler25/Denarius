@@ -58,6 +58,8 @@ interface RecurringItem {
   last_paid_amount?: number | null;
   last_paid_transaction_id?: string | null;
   is_paid_current_period?: boolean;
+  expected_payments_this_month?: number;
+  paid_payments_this_month?: number;
   expense_account_id?: string | null;
 }
 
@@ -726,7 +728,10 @@ function RecurringCard({
 }) {
   const updateRecurring = useUpdateRecurring(item.id);
   const navigate = useNavigate();
-  const isPaid = item.is_paid_current_period === true;
+  const expected = item.expected_payments_this_month ?? 1;
+  const paid = item.paid_payments_this_month ?? 0;
+  const isPaid = paid >= expected;
+  const actionLabel = item.type === "income" ? "received" : "paid";
 
   async function handleToggle() {
     await updateRecurring.mutateAsync({ is_active: !item.is_active });
@@ -782,6 +787,11 @@ function RecurringCard({
         ) : (
           <div className="text-xs text-muted-foreground">
             Next due: {formatDate(item.next_due_date)}
+          </div>
+        )}
+        {expected > 1 && (
+          <div className="text-xs text-muted-foreground">
+            {paid} of {expected} {actionLabel} this month
           </div>
         )}
         <div className="flex items-center gap-2 pt-1">

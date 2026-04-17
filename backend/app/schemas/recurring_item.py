@@ -66,6 +66,8 @@ class RecurringOut(BaseModel):
     last_paid_amount: Optional[Decimal] = None
     last_paid_transaction_id: Optional[uuid.UUID] = None
     is_paid_current_period: bool = False
+    expected_payments_this_month: int = 1
+    paid_payments_this_month: int = 0
     expense_account_id: Optional[uuid.UUID] = None
 
 
