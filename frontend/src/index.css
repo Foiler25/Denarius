@@ -51,6 +51,15 @@
 
     --density-y: 0.75rem;
     --density-x: 1rem;
+
+    /* Per-surface density tokens. Consumed via p-[var(--density-...)] or
+       h-[var(--density-...)] in the shadcn components, and via unlayered
+       global rules further down for tables and menu items. */
+    --density-card-p: 1.5rem;       /* Card header / content / footer padding */
+    --density-table-y: 0.75rem;     /* Table cell vertical padding */
+    --density-table-x: 1rem;        /* Table cell horizontal padding */
+    --density-control-h: 2.5rem;    /* Input / Select / default Button height */
+    --density-menu-item-y: 0.375rem; /* Dropdown / Select item vertical padding */
   }
 
   :root[data-accent="blue"] {
@@ -146,10 +155,20 @@
   :root[data-density="compact"] {
     --density-y: 0.5rem;
     --density-x: 0.75rem;
+    --density-card-p: 1rem;
+    --density-table-y: 0.5rem;
+    --density-table-x: 0.75rem;
+    --density-control-h: 2.25rem;
+    --density-menu-item-y: 0.25rem;
   }
   :root[data-density="spacious"] {
     --density-y: 1rem;
     --density-x: 1.25rem;
+    --density-card-p: 1.75rem;
+    --density-table-y: 1rem;
+    --density-table-x: 1.25rem;
+    --density-control-h: 2.75rem;
+    --density-menu-item-y: 0.5rem;
   }
 
   .dark {
@@ -273,5 +292,29 @@
   *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Density overrides — UNLAYERED ON PURPOSE.
+   Rules outside any @layer beat rules inside @layer utilities (where
+   Tailwind's px-4/py-3 etc. live), regardless of specificity. This lets
+   the density tokens restyle tables and menu items across every page
+   without editing each component and without using !important.
+   -------------------------------------------------------------------------- */
+html[data-density] table :where(th, td) {
+  padding: var(--density-table-y) var(--density-table-x);
+}
+
+html[data-density] :where([role="menuitem"], [role="option"], [data-radix-collection-item]) {
+  padding-top: var(--density-menu-item-y);
+  padding-bottom: var(--density-menu-item-y);
+}
+
+/* Keep mobile touch targets usable in compact mode (Apple HIG ≥44pt).
+   h-9 (36px) is too small to reliably tap; clamp to 40px on ≤768px. */
+@media (max-width: 768px) {
+  :root[data-density="compact"] {
+    --density-control-h: 2.5rem;
   }
 }
