@@ -144,6 +144,12 @@ export function SearchableSelect({
         createPortal(
           <div
             ref={dropdownRef}
+            // pointerEvents: 'auto' overrides the body lock that Radix Dialog
+            // (via react-remove-scroll) installs when a modal is open —
+            // without this, our portaled dropdown is click-through.
+            // stopPropagation on pointer/mouse-down keeps Radix Dialog's
+            // onPointerDownOutside from firing and closing the parent dialog
+            // when the user picks an option.
             style={{
               position: "fixed",
               top: pos.placement === "below" ? pos.top : undefined,
@@ -151,7 +157,10 @@ export function SearchableSelect({
               left: pos.left,
               width: pos.width,
               zIndex: 100,
+              pointerEvents: "auto",
             }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             className="rounded-md border bg-popover text-popover-foreground shadow-md"
           >
             <div className="flex items-center border-b px-3">

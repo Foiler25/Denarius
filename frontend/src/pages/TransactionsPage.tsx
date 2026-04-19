@@ -122,7 +122,10 @@ export default function TransactionsPage() {
 
   // Auto-search + flash a row when arriving from the global search
   // (/transactions?highlight=<id>&q=<description>). Clears date filters so the
-  // row is reachable regardless of when the transaction occurred.
+  // row is reachable regardless of when the transaction occurred. The fade
+  // timer is started in a separate effect below — only after the row actually
+  // appears in the loaded data, so a slow API doesn't expire the highlight
+  // before the row even renders.
   const consumedHighlight = useRef(false);
   useEffect(() => {
     if (consumedHighlight.current) return;
@@ -140,9 +143,6 @@ export default function TransactionsPage() {
     next.delete("highlight");
     next.delete("q");
     setSearchParams(next, { replace: true });
-
-    const timer = setTimeout(() => setHighlightedTxId(null), 2500);
-    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -177,6 +177,17 @@ export default function TransactionsPage() {
 
   const transactions: Transaction[] = txData?.items ?? txData ?? [];
   const totalPages: number = txData?.pages ?? 1;
+
+  // Once the highlighted transaction is in the loaded list, hold the flash
+  // for 2.5s and then fade. If it never loads (e.g., wrong description match)
+  // give up after 6s so the state doesn't leak.
+  useEffect(() => {
+    if (!highlightedTxId) return;
+    const found = transactions.some((t) => t.id === highlightedTxId);
+    const delay = found ? 2500 : 6000;
+    const timer = setTimeout(() => setHighlightedTxId(null), delay);
+    return () => clearTimeout(timer);
+  }, [highlightedTxId, transactions]);
 
   function handleFilterChange() {
     setPage(1);
