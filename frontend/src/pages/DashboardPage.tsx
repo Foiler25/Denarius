@@ -118,8 +118,8 @@ function AccountBalancesChart() {
             No accounts selected. Go to{" "}
             <Link to="/settings" className="ml-1 underline underline-offset-2">
               Settings → Preferences
-            </Link>{" "}
-            to choose which accounts to display.
+            </Link>
+            {" "}to choose which accounts to display.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>

@@ -1,0 +1,21 @@
+node_modules
+dist
+.vite
+.git
+.gitignore
+.DS_Store
+
+# macOS / exFAT AppleDouble sidecars
+._*
+.AppleDouble
+.AppleDB
+.AppleDesktop
+.Spotlight-V100
+.Trashes
+
+# Local env / editor
+.env
+.env.local
+.vscode
+.idea
+*.log

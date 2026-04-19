@@ -1,4 +1,6 @@
 import asyncio
+import glob
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -9,6 +11,17 @@ from alembic import context
 
 from app.config import get_settings
 from app.models.base import Base
+
+# When the source tree is bind-mounted from a macOS host on an exFAT volume,
+# macOS writes AppleDouble sidecar files (._*) next to every edited file.
+# Alembic's revision scanner picks them up as Python files and crashes. Strip
+# them defensively before any migrations are loaded.
+_versions_dir = os.path.join(os.path.dirname(__file__), "versions")
+for _f in glob.glob(os.path.join(_versions_dir, "._*")):
+    try:
+        os.remove(_f)
+    except OSError:
+        pass
 
 # Import all models so Alembic can detect them
 from app.models import (  # noqa: F401

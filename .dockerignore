@@ -1,0 +1,42 @@
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.idea
+.DS_Store
+.claude
+
+# macOS / exFAT AppleDouble sidecars
+**/._*
+._*
+.AppleDouble
+.AppleDB
+.AppleDesktop
+.Spotlight-V100
+.Trashes
+
+# Build/dev output
+**/node_modules
+**/dist
+**/.vite
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.pyc
+**/.venv
+**/venv
+
+# Local env / logs
+**/.env
+**/.env.local
+*.log
+**/*.log
+
+# Docs / planning that shouldn't ship in image
+*.md
+docs
+
+# Backups directory (mounted as a volume at runtime)
+backups

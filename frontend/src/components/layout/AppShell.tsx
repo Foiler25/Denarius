@@ -1,72 +1,58 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import Sidebar from "./Sidebar";
-import Header from "./Header";
+import { Topbar } from "./Topbar";
+import { MobileNav } from "./MobileNav";
+import { CommandPalette } from "@/components/CommandPalette";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
-  "/accounts": "Asset Accounts",
-  "/expense-accounts": "Expense Accounts",
-  "/categories": "Categories",
-  "/transactions": "Transactions",
-  "/budgets": "Budgets",
-  "/recurring": "Recurring & Subscriptions",
-  "/mortgage": "Mortgage",
-  "/loans": "Loans",
-  "/networth": "Net Worth",
-  "/reports": "Reports",
-  "/settings": "Settings",
-};
-
-function getSidebarCollapsed(): boolean {
-  try {
-    return localStorage.getItem("sidebar-collapsed") === "true";
-  } catch {
-    return false;
-  }
-}
 
 export default function AppShell() {
   const location = useLocation();
-  const title = PAGE_TITLES[location.pathname] ?? "Denarius";
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
-  const [collapsed, setCollapsed] = useState(getSidebarCollapsed);
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleToggle = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("sidebar-collapsed", String(next));
-      } catch {}
-      return next;
-    });
-  };
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((s) => !s);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   return (
-    <div className="flex min-h-dvh">
-      {/* Desktop sidebar — hidden on mobile */}
-      <div className="hidden md:flex sticky top-0 h-dvh shrink-0">
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={handleToggle}
-        />
+    <div className="h-dvh flex bg-background text-foreground">
+      <Sidebar />
+
+      <div className="flex-1 min-w-0 flex flex-col">
+        <Topbar onOpenSearch={() => setSearchOpen(true)} />
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
 
-      {/* Mobile sidebar — Sheet drawer */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+      <MobileNav onOpenMore={() => setMobileMoreOpen(true)} />
+
+      <Sheet open={mobileMoreOpen} onOpenChange={setMobileMoreOpen}>
         <SheetContent side="left" className="p-0 w-64">
-          <Sidebar mobile onClose={() => setMobileOpen(false)} />
+          <Sidebar mobile onClose={() => setMobileMoreOpen(false)} />
         </SheetContent>
       </Sheet>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header title={title} onMobileMenuOpen={() => setMobileOpen(true)} />
-        <main className="flex-1 bg-background">
-          <Outlet />
-        </main>
-      </div>
+      <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

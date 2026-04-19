@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/ui/logo";
 import { login, register } from "@/api/auth";
 
 export default function LoginPage() {
@@ -40,10 +41,21 @@ export default function LoginPage() {
       }
       navigate("/");
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
+      const axiosError = err as {
+        response?: { data?: { detail?: string | Array<{ loc?: (string | number)[]; msg?: string }> } };
+      };
       const detail = axiosError?.response?.data?.detail;
       if (typeof detail === "string") {
         setError(detail);
+      } else if (Array.isArray(detail)) {
+        const msgs = detail
+          .map((d) => {
+            const field = d.loc?.[d.loc.length - 1];
+            const msg = (d.msg ?? "").replace(/^Value error,\s*/i, "");
+            return field ? `${field}: ${msg}` : msg;
+          })
+          .filter(Boolean);
+        setError(msgs.join(" · ") || (mode === "login" ? "Invalid credentials." : "Registration failed."));
       } else {
         setError(mode === "login" ? "Invalid username or password." : "Registration failed. Please try again.");
       }
@@ -66,7 +78,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Branding */}
         <div className="flex flex-col items-center mb-8 gap-2">
-          <img src="/coin.svg" alt="Denarius" className="w-14 h-14" />
+          <Logo showWordmark={false} size={56} />
           <h1 className="text-3xl font-bold tracking-tight">Denarius</h1>
           <p className="text-muted-foreground text-sm">Personal finance, clearly tracked.</p>
         </div>

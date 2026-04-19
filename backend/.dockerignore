@@ -1,0 +1,26 @@
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.venv
+venv
+.git
+.gitignore
+.DS_Store
+
+# macOS / exFAT AppleDouble sidecars
+._*
+.AppleDouble
+.AppleDB
+.AppleDesktop
+.Spotlight-V100
+.Trashes
+
+# Local env / editor
+.env
+.env.local
+.vscode
+.idea
+*.log

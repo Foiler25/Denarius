@@ -2,13 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
+import { applyPreferencesToDOM, usePreferencesStore } from "./store/preferencesStore";
 import "./index.css";
 
-// Apply dark mode before React renders to prevent flash
-try {
-  const isDark = localStorage.getItem("denarius-dark") !== "false";
-  document.documentElement.classList.toggle("dark", isDark);
-} catch {}
+applyPreferencesToDOM(usePreferencesStore.getState());
 
 const queryClient = new QueryClient({
   defaultOptions: {

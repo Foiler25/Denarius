@@ -21,7 +21,7 @@ depends_on = None
 
 def upgrade():
     conn = op.get_bind()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
 
     # Clear paired_transaction_id on any remaining non-deleted transactions
     # that reference a transfer (prevents FK issues)

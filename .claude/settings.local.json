@@ -5,7 +5,21 @@
       "mcp__dual-graph__graph_scan",
       "mcp__dual-graph__graph_read",
       "Bash(grep -l \"recurring_item_id\" /Users/loofa/Documents/Denarius/backend/alembic/versions/*.py)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git update-ref:*)",
+      "Bash(git reset:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(grep:*)",
+      "Bash(defaults:*)",
+      "Bash(mount:*)",
+      "Bash(df:*)",
+      "Bash(ls:*)",
+      "Bash(dot_clean:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(git log:*)",
+      "Bash(echo:*)"
     ]
   },
   "hooks": {

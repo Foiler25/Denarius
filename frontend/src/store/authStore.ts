@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { useThemeStore } from "./themeStore";
+import { usePreferencesStore } from "./preferencesStore";
 import { useDashboardStore } from "./dashboardStore";
 
 export interface User {
@@ -22,9 +22,7 @@ interface AuthState {
 }
 
 function applyUserPreferences(user: User) {
-  if (user.theme_dark != null) {
-    useThemeStore.getState().setDark(user.theme_dark);
-  }
+  usePreferencesStore.getState().hydrateFromUser(user.theme_dark);
   if (user.dashboard_hidden_accounts != null) {
     useDashboardStore.getState().setHiddenAccounts(user.dashboard_hidden_accounts);
   }

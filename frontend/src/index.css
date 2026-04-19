@@ -4,74 +4,186 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+
+    /* shadcn HSL tokens — remapped to EstateOS palette */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 24 10% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 24 10% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 24 10% 10%;
+    --primary: 217 91% 60%;           /* blue #3B82F6 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 60 5% 96%;           /* stone-100 */
+    --secondary-foreground: 24 10% 10%;
+    --muted: 60 5% 96%;
+    --muted-foreground: 25 5% 45%;    /* stone-500 */
+    --accent: 60 5% 96%;              /* shadcn hover surface (kept) */
+    --accent-foreground: 24 10% 10%;
+    --destructive: 0 75% 42%;         /* danger #B91C1C */
+    --destructive-foreground: 0 0% 100%;
+    --border: 20 6% 90%;              /* stone-200 */
+    --input: 20 6% 90%;
+    --ring: 217 91% 60%;              /* blue focus ring */
+    --radius: 0.625rem;
     --chart-1: 221.2 83.2% 53.3%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 221.2 83.2% 53.3%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 221.2 83.2% 53.3%;
+    --sidebar-background: 0 0% 100%;  /* white sidebar (was dark) */
+    --sidebar-foreground: 24 10% 10%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 60 5% 96%;
+    --sidebar-accent-foreground: 24 10% 10%;
+    --sidebar-border: 20 6% 90%;
+    --sidebar-ring: 217 91% 60%;
+
+    /* EstateOS direct-color tokens (separate namespace to avoid HSL collision) */
+    --ea-accent: #3B82F6;
+    --ea-accent-600: #2563EB;
+    --ea-accent-700: #1D4ED8;
+    --ea-accent-soft: #DBEAFE;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(59, 130, 246, 0.25);
+
+    --density-y: 0.75rem;
+    --density-x: 1rem;
+  }
+
+  :root[data-accent="blue"] {
+    --ea-accent: #3B82F6;
+    --ea-accent-600: #2563EB;
+    --ea-accent-700: #1D4ED8;
+    --ea-accent-soft: #DBEAFE;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(59, 130, 246, 0.25);
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 217 91% 60%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  :root[data-accent="gold"] {
+    --ea-accent: #C9A84C;
+    --ea-accent-600: #A8873D;
+    --ea-accent-700: #85672E;
+    --ea-accent-soft: #FBF5E0;
+    --ea-accent-contrast: #1C1917;
+    --ea-accent-ring: rgba(201, 168, 76, 0.25);
+    --primary: 45 56% 54%;
+    --primary-foreground: 24 10% 10%;
+    --ring: 45 56% 54%;
+    --sidebar-primary: 45 56% 54%;
+    --sidebar-primary-foreground: 24 10% 10%;
+    --sidebar-ring: 45 56% 54%;
+  }
+
+  :root[data-accent="rose"] {
+    --ea-accent: #E11D48;
+    --ea-accent-600: #BE123C;
+    --ea-accent-700: #9F1239;
+    --ea-accent-soft: #FFE4E6;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(225, 29, 72, 0.25);
+    --primary: 350 89% 50%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 350 89% 50%;
+    --sidebar-primary: 350 89% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 350 89% 50%;
+  }
+
+  :root[data-accent="sky"] {
+    --ea-accent: #0284C7;
+    --ea-accent-600: #0369A1;
+    --ea-accent-700: #075985;
+    --ea-accent-soft: #E0F2FE;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(2, 132, 199, 0.25);
+    --primary: 200 98% 39%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 200 98% 39%;
+    --sidebar-primary: 200 98% 39%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 200 98% 39%;
+  }
+
+  :root[data-accent="emerald"] {
+    --ea-accent: #059669;
+    --ea-accent-600: #047857;
+    --ea-accent-700: #065F46;
+    --ea-accent-soft: #D1FAE5;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(5, 150, 105, 0.25);
+    --primary: 160 90% 30%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 160 90% 30%;
+    --sidebar-primary: 160 90% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 160 90% 30%;
+  }
+
+  :root[data-accent="violet"] {
+    --ea-accent: #7C3AED;
+    --ea-accent-600: #6D28D9;
+    --ea-accent-700: #5B21B6;
+    --ea-accent-soft: #EDE9FE;
+    --ea-accent-contrast: #FFFFFF;
+    --ea-accent-ring: rgba(124, 58, 237, 0.25);
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 262 83% 58%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 262 83% 58%;
+  }
+
+  :root[data-density="compact"] {
+    --density-y: 0.5rem;
+    --density-x: 0.75rem;
+  }
+  :root[data-density="spacious"] {
+    --density-y: 1rem;
+    --density-x: 1.25rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    color-scheme: dark;
+
+    /* dark-mode surfaces, text, borders — accent-related vars (--primary,
+       --ring, --sidebar-primary*) intentionally omitted so the [data-accent]
+       blocks above remain authoritative regardless of theme. */
+    --background: 0 0% 10%;           /* surface-dark */
+    --foreground: 60 5% 96%;          /* stone-100 */
+    --card: 0 0% 14%;                 /* surface-dark-secondary */
+    --card-foreground: 60 5% 96%;
+    --popover: 0 0% 14%;
+    --popover-foreground: 60 5% 96%;
+    --secondary: 0 0% 18%;            /* surface-dark-tertiary */
+    --secondary-foreground: 60 5% 96%;
+    --muted: 0 0% 18%;
+    --muted-foreground: 24 5% 64%;    /* stone-400 */
+    --accent: 0 0% 18%;
+    --accent-foreground: 60 5% 96%;
+    --destructive: 0 62% 38%;
+    --destructive-foreground: 60 5% 96%;
+    --border: 12 6% 15%;              /* stone-800 */
+    --input: 12 6% 15%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217.2 91.2% 59.8%;
-    --sidebar-primary-foreground: 222.2 47.4% 11.2%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 224.3 76.3% 48%;
+    --sidebar-background: 0 0% 14%;
+    --sidebar-foreground: 60 5% 96%;
+    --sidebar-accent: 0 0% 18%;
+    --sidebar-accent-foreground: 60 5% 96%;
+    --sidebar-border: 12 6% 15%;
   }
 }
 
@@ -79,13 +191,87 @@
   * {
     @apply border-border;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
   }
   input[type="date"] {
     -webkit-appearance: none;
     appearance: none;
     min-width: 0;
     max-width: 100%;
+  }
+
+  /* iOS Safari auto-zooms into any focused form control whose font-size is
+     under 16px. Bump form fields to 16px on mobile to prevent the zoom. */
+  @media (max-width: 768px) {
+    input,
+    textarea,
+    select,
+    [role="combobox"] {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Default focus ring for non-form interactive elements only.
+     Form controls (input, button, textarea, select) and Radix primitives
+     ship their own focus-visible styles; stacking a global box-shadow on
+     top of those creates a doubled ring that gets clipped by tight
+     container padding (e.g. dialog forms). Use outline so the indicator
+     paints outside the box without affecting layout, and use :where()
+     to keep specificity at 0 so component-level rules still win. */
+  :where(a, [tabindex]):focus-visible {
+    outline: 2px solid var(--ea-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+  }
+}
+
+@layer components {
+  .density-pad {
+    padding: var(--density-y) var(--density-x);
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--accent)) 40%,
+      hsl(var(--muted)) 80%
+    );
+    background-size: 800px 100%;
+    animation: shimmer 1.8s linear infinite;
+  }
+
+  .bg-grid-gold {
+    background-image:
+      linear-gradient(to right, rgba(201, 168, 76, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(201, 168, 76, 0.07) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }

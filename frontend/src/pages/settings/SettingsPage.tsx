@@ -1,13 +1,28 @@
-import { useState, useRef } from "react";
-import { Moon, Sun, Globe, Download, Upload } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Moon, Sun, Globe, Download, Upload, UserPlus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useThemeStore } from "@/store/themeStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import {
+  usePreferencesStore,
+  type AccentColor,
+  type Density,
+  type SidebarStyle,
+} from "@/store/preferencesStore";
 import { TIMEZONES } from "@/lib/timezones";
 import {
   Select,
@@ -68,10 +83,286 @@ function useUpdateUser(userId: string) {
   });
 }
 
+function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) => api.post(`/users`, data).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+function useDeleteUserPermanently() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.delete(`/users/${userId}/permanent`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+function parseApiError(err: unknown, fallback: string): string {
+  const axiosErr = err as {
+    response?: { data?: { detail?: string | Array<{ loc?: (string | number)[]; msg?: string }> } };
+  };
+  const detail = axiosErr?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((d) => {
+        const field = d.loc?.[d.loc.length - 1];
+        const msg = (d.msg ?? "").replace(/^Value error,\s*/i, "");
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .filter(Boolean);
+    if (msgs.length) return msgs.join(" · ");
+  }
+  return fallback;
+}
+
+interface UserDialogProps {
+  mode: "create" | "edit";
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  user?: User;
+}
+
+function UserDialog({ mode, open, onOpenChange, user }: UserDialogProps) {
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState<"admin" | "member">("member");
+  const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser(user?.id ?? "");
+  const deleteUser = useDeleteUserPermanently();
+  const currentUser = useAuthStore((s) => s.user);
+  const isEditingSelf = mode === "edit" && user?.id === currentUser?.id;
+
+  useEffect(() => {
+    if (open) {
+      setUsername(user?.username ?? "");
+      setEmail(user?.email ?? "");
+      setPassword("");
+      setConfirmPassword("");
+      setRole((user?.role as "admin" | "member") ?? "member");
+      setError(null);
+      setConfirmingDelete(false);
+    }
+  }, [open, user]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    if (mode === "create") {
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+      try {
+        await createUser.mutateAsync({ username, email, password, role });
+        onOpenChange(false);
+      } catch (err) {
+        setError(parseApiError(err, "Failed to create user."));
+      }
+      return;
+    }
+
+    // edit mode
+    const payload: Record<string, unknown> = {};
+    if (username && username !== user?.username) payload.username = username;
+    if (email && email !== user?.email) payload.email = email;
+    if (password) {
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+      payload.password = password;
+    }
+    if (Object.keys(payload).length === 0) {
+      onOpenChange(false);
+      return;
+    }
+    try {
+      await updateUser.mutateAsync(payload);
+      onOpenChange(false);
+    } catch (err) {
+      setError(parseApiError(err, "Failed to update user."));
+    }
+  }
+
+  async function handlePermanentDelete() {
+    if (!user) return;
+    setError(null);
+    try {
+      await deleteUser.mutateAsync(user.id);
+      onOpenChange(false);
+    } catch (err) {
+      setError(parseApiError(err, "Failed to delete user."));
+      setConfirmingDelete(false);
+    }
+  }
+
+  const pending = createUser.isPending || updateUser.isPending || deleteUser.isPending;
+
+  if (mode === "edit" && confirmingDelete && user) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete {user.username} permanently?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              This removes <strong>{user.username}</strong> ({user.email}) from the system.
+              This action cannot be undone.
+            </p>
+            <p className="text-muted-foreground">
+              Any transactions or recurring items they created will be reassigned to you
+              ({currentUser?.username}) so nothing is lost.
+            </p>
+            {error && (
+              <p className="text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+                {error}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingDelete(false)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handlePermanentDelete} disabled={pending}>
+              {deleteUser.isPending ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{mode === "create" ? "Add user" : `Edit ${user?.username ?? "user"}`}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="user-username">Username</Label>
+            <Input
+              id="user-username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="user-email">Email</Label>
+            <Input
+              id="user-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="off"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="user-password">
+              {mode === "edit" ? "New password (leave blank to keep current)" : "Password"}
+            </Label>
+            <Input
+              id="user-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+              required={mode === "create"}
+              minLength={mode === "create" ? 8 : undefined}
+              placeholder={mode === "edit" ? "••••••••" : undefined}
+            />
+          </div>
+          {(mode === "create" || password.length > 0) && (
+            <div className="space-y-1.5">
+              <Label htmlFor="user-password-confirm">Confirm password</Label>
+              <Input
+                id="user-password-confirm"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </div>
+          )}
+          {mode === "create" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="user-role">Role</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as "admin" | "member")}>
+                <SelectTrigger id="user-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
+          <DialogFooter className="pt-2 sm:justify-between sm:items-center">
+            {mode === "edit" && !isEditingSelf ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setConfirmingDelete(true)}
+                disabled={pending}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete permanently
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Saving…" : mode === "create" ? "Create user" : "Save changes"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function UsersTab() {
   const { data: users = [], isLoading, isError } = useUsers();
   const userList: User[] = Array.isArray(users) ? users : [];
   const currentUser = useAuthStore((s) => s.user);
+  const [createOpen, setCreateOpen] = useState(false);
 
   if (isLoading) return <Spinner />;
   if (isError) {
@@ -84,7 +375,14 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{userList.length} users</p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{userList.length} users</p>
+        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-2">
+          <UserPlus className="h-4 w-4" />
+          Add user
+        </Button>
+      </div>
+      <UserDialog mode="create" open={createOpen} onOpenChange={setCreateOpen} />
       {userList.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground text-sm">No users found.</div>
       ) : (
@@ -120,6 +418,7 @@ function UsersTab() {
 function UserRow({ user, isCurrentUser }: { user: User; isCurrentUser: boolean }) {
   const updateUser = useUpdateUser(user.id);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   async function handleRoleChange(newRole: string) {
     setRoleError(null);
@@ -181,19 +480,131 @@ function UserRow({ user, isCurrentUser }: { user: User; isCurrentUser: boolean }
         </Badge>
       </td>
       <td className="px-4 py-3 text-right">
-        {!isCurrentUser && (
+        <div className="flex items-center justify-end gap-1.5">
           <Button
             variant="outline"
             size="sm"
-            className="text-xs h-7"
-            onClick={handleToggleActive}
-            disabled={updateUser.isPending}
+            className="text-xs h-7 gap-1"
+            onClick={() => setEditOpen(true)}
           >
-            {user.is_active ? "Deactivate" : "Activate"}
+            <Pencil className="h-3 w-3" />
+            Edit
           </Button>
-        )}
+          {!isCurrentUser && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-7"
+              onClick={handleToggleActive}
+              disabled={updateUser.isPending}
+            >
+              {user.is_active ? "Deactivate" : "Activate"}
+            </Button>
+          )}
+        </div>
+        <UserDialog mode="edit" user={user} open={editOpen} onOpenChange={setEditOpen} />
       </td>
     </tr>
+  );
+}
+
+// ---- Personalization (Appearance) ----
+const ACCENTS: { value: AccentColor; label: string; swatch: string }[] = [
+  { value: "gold", label: "Gold", swatch: "#C9A84C" },
+  { value: "rose", label: "Rose", swatch: "#E11D48" },
+  { value: "sky", label: "Sky", swatch: "#0284C7" },
+  { value: "emerald", label: "Emerald", swatch: "#059669" },
+  { value: "violet", label: "Violet", swatch: "#7C3AED" },
+];
+
+const DENSITIES: { value: Density; label: string }[] = [
+  { value: "comfortable", label: "Comfortable" },
+  { value: "compact", label: "Compact" },
+  { value: "spacious", label: "Spacious" },
+];
+
+const SIDEBAR_STYLES: { value: SidebarStyle; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "minimal", label: "Minimal" },
+  { value: "floating", label: "Floating" },
+];
+
+function PersonalizationCard() {
+  const accentColor = usePreferencesStore((s) => s.accentColor);
+  const setAccent = usePreferencesStore((s) => s.setAccent);
+  const density = usePreferencesStore((s) => s.density);
+  const setDensity = usePreferencesStore((s) => s.setDensity);
+  const sidebarStyle = usePreferencesStore((s) => s.sidebarStyle);
+  const setSidebarStyle = usePreferencesStore((s) => s.setSidebarStyle);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Personalization
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div>
+          <p className="text-sm font-medium mb-2">Accent color</p>
+          <div className="flex items-center gap-2">
+            {ACCENTS.map((a) => (
+              <button
+                key={a.value}
+                onClick={() => setAccent(a.value)}
+                aria-label={a.label}
+                title={a.label}
+                className={cn(
+                  "h-8 w-8 rounded-full border-2 transition-transform",
+                  accentColor === a.value ? "border-foreground scale-110" : "border-transparent",
+                )}
+                style={{ background: a.swatch }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">Density</p>
+          <div className="inline-flex rounded-md border bg-background p-0.5">
+            {DENSITIES.map((d) => (
+              <button
+                key={d.value}
+                onClick={() => setDensity(d.value)}
+                className={cn(
+                  "px-3 py-1.5 text-xs rounded-sm transition-colors",
+                  density === d.value
+                    ? "bg-[var(--ea-accent)] text-[var(--ea-accent-contrast)]"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium mb-2">Sidebar style</p>
+          <div className="inline-flex rounded-md border bg-background p-0.5">
+            {SIDEBAR_STYLES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setSidebarStyle(s.value)}
+                className={cn(
+                  "px-3 py-1.5 text-xs rounded-sm transition-colors",
+                  sidebarStyle === s.value
+                    ? "bg-[var(--ea-accent)] text-[var(--ea-accent-contrast)]"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -239,6 +650,8 @@ function PreferencesTab() {
           </div>
         </CardContent>
       </Card>
+
+      <PersonalizationCard />
 
       <Card>
         <CardHeader className="pb-3">

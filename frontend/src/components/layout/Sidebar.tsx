@@ -13,183 +13,189 @@ import {
   ShoppingCart,
   Tag,
   ChevronLeft,
-  ChevronRight,
+  Moon,
+  Sun,
+  LogOut,
+  type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/authStore";
+import { usePreferencesStore, isEffectiveDark } from "@/store/preferencesStore";
+import { logout } from "@/api/auth";
+import { Logo } from "@/components/ui/logo";
+import { Avatar } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
-const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/transactions", icon: ArrowLeftRight, label: "Transactions" },
-  { to: "/budgets", icon: Target, label: "Budgets" },
-  { to: "/recurring", icon: RotateCcw, label: "Recurring" },
-  { to: "/mortgage", icon: Home, label: "Mortgage" },
-  { to: "/loans", icon: Landmark, label: "Loans" },
-  { to: "/reports", icon: BarChart3, label: "Reports" },
-  { to: "/networth", icon: TrendingUp, label: "Net Worth" },
+interface NavItem {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+const PRIMARY: NavItem[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { to: "/budgets", label: "Budgets", icon: Target },
+  { to: "/recurring", label: "Recurring", icon: RotateCcw },
+  { to: "/mortgage", label: "Mortgage", icon: Home },
+  { to: "/loans", label: "Loans", icon: Landmark },
+  { to: "/reports", label: "Reports", icon: BarChart3 },
+  { to: "/networth", label: "Net Worth", icon: TrendingUp },
 ];
 
-const accountNavItems = [
-  { to: "/accounts", icon: Wallet, label: "Asset Accounts" },
-  { to: "/expense-accounts", icon: ShoppingCart, label: "Expense Accounts" },
-  { to: "/categories", icon: Tag, label: "Categories" },
+const ACCOUNTS: NavItem[] = [
+  { to: "/accounts", label: "Asset Accounts", icon: Wallet },
+  { to: "/expense-accounts", label: "Expense Accounts", icon: ShoppingCart },
+  { to: "/categories", label: "Categories", icon: Tag },
 ];
 
 interface SidebarProps {
-  collapsed?: boolean;
-  onToggle?: () => void;
   mobile?: boolean;
   onClose?: () => void;
 }
 
-function NavItem({
-  to,
-  icon: Icon,
-  label,
-  collapsed,
-  onClick,
-}: {
-  to: string;
-  icon: React.ElementType;
-  label: string;
-  collapsed?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <NavLink
-      to={to}
-      end={to === "/"}
-      onClick={onClick}
-      className={({ isActive }) =>
-        cn(
-          "w-full flex items-center py-2 rounded-md text-sm font-medium transition-colors",
-          collapsed ? "justify-center px-2" : "gap-3 px-3",
-          isActive
-            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-        )
-      }
-    >
-      {collapsed ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="flex items-center justify-center">
-              <Icon className="h-4 w-4 shrink-0" />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      ) : (
-        <>
-          <Icon className="h-4 w-4 shrink-0" />
-          <span>{label}</span>
-        </>
-      )}
-    </NavLink>
-  );
-}
+export default function Sidebar({ mobile = false, onClose }: SidebarProps) {
+  const collapsedPref = usePreferencesStore((s) => s.sidebarCollapsed);
+  const setCollapsed = usePreferencesStore((s) => s.setSidebarCollapsed);
+  const sidebarStyle = usePreferencesStore((s) => s.sidebarStyle);
+  const theme = usePreferencesStore((s) => s.theme);
+  const toggleTheme = usePreferencesStore((s) => s.toggleTheme);
+  const user = useAuthStore((s) => s.user);
+  const refreshToken = useAuthStore((s) => s.refreshToken);
 
-export default function Sidebar({
-  collapsed = false,
-  onToggle,
-  mobile = false,
-  onClose,
-}: SidebarProps) {
+  const collapsed = mobile ? false : sidebarStyle === "minimal" ? true : collapsedPref;
+  const isDark = isEffectiveDark(theme);
+  const showCollapseToggle = !mobile && sidebarStyle !== "minimal";
+
+  const handleLogout = async () => {
+    if (refreshToken) await logout(refreshToken);
+  };
+
+  const renderNav = (items: NavItem[]) =>
+    items.map((item) => {
+      const Icon = item.icon;
+      const link = (
+        <NavLink
+          to={item.to}
+          end={item.end}
+          onClick={mobile ? onClose : undefined}
+          className={({ isActive }) =>
+            cn(
+              "mx-2 flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors border-l-2 border-transparent",
+              collapsed && "justify-center px-0",
+              isActive
+                ? "bg-[var(--ea-accent-soft)] text-[var(--ea-accent-700)] dark:bg-[var(--ea-accent)]/15 dark:text-[var(--ea-accent)] border-l-2 border-[var(--ea-accent)]"
+                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            )
+          }
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
+        </NavLink>
+      );
+      if (collapsed) {
+        return (
+          <Tooltip key={item.to}>
+            <TooltipTrigger asChild>
+              <span className="block">{link}</span>
+            </TooltipTrigger>
+            <TooltipContent side="right">{item.label}</TooltipContent>
+          </Tooltip>
+        );
+      }
+      return <div key={item.to}>{link}</div>;
+    });
+
   return (
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "bg-sidebar text-sidebar-foreground flex flex-col h-full border-r border-sidebar-border transition-all duration-300",
-          collapsed ? "w-16" : "w-64"
+          "flex flex-col shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200",
+          collapsed ? "w-16" : "w-60",
+          mobile ? "h-full" : "hidden md:flex h-dvh sticky top-0",
+          !mobile && sidebarStyle === "floating" && "m-2 rounded-xl shadow-lg border h-[calc(100dvh-1rem)] sticky top-2",
         )}
       >
-        {/* Branding */}
         <div
           className={cn(
-            "h-14 flex items-center gap-2 border-b border-sidebar-border shrink-0",
-            collapsed ? "justify-center px-2" : "px-6"
+            "h-14 flex items-center border-b border-sidebar-border px-3 shrink-0",
+            collapsed ? "justify-center" : "justify-between",
           )}
         >
-          <img src="/coin.svg" alt="Denarius" className="w-8 h-8 shrink-0" />
-          {!collapsed && (
-            <span className="text-xl font-bold tracking-tight">Denarius</span>
+          {collapsed ? <Logo showWordmark={false} size={28} /> : <Logo size={28} />}
+          {!collapsed && showCollapseToggle && (
+            <button
+              onClick={() => setCollapsed(true)}
+              className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground"
+              aria-label="Collapse sidebar"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
           )}
         </div>
 
-        <div className="flex flex-col flex-1 overflow-y-auto">
-          {/* Primary nav */}
-          <nav className="px-2 py-4 space-y-1">
-            {navItems.map(({ to, icon, label }) => (
-              <NavItem
-                key={to}
-                to={to}
-                icon={icon}
-                label={label}
-                collapsed={collapsed}
-                onClick={mobile ? onClose : undefined}
-              />
-            ))}
-          </nav>
+        <div className="flex-1 overflow-y-auto py-3">
+          <nav className="space-y-0.5">{renderNav(PRIMARY)}</nav>
 
-          {/* Accounts section */}
-          <div className="px-2 py-2">
+          <div className="mt-4">
             {!collapsed && (
-              <h2 className="mb-2 px-3 text-lg font-semibold tracking-tight">
+              <div className="px-4 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Accounts
-              </h2>
+              </div>
             )}
-            {collapsed && <div className="border-t border-sidebar-border mb-2" />}
-            <div className="space-y-1">
-              {accountNavItems.map(({ to, icon, label }) => (
-                <NavItem
-                  key={to}
-                  to={to}
-                  icon={icon}
-                  label={label}
-                  collapsed={collapsed}
-                  onClick={mobile ? onClose : undefined}
-                />
-              ))}
-            </div>
+            {collapsed && <div className="border-t border-sidebar-border mx-2 my-2" />}
+            <nav className="space-y-0.5">{renderNav(ACCOUNTS)}</nav>
           </div>
 
-          {/* Bottom: Settings + collapse toggle */}
-          <nav className="mt-auto px-2 pb-2 space-y-1">
-            <NavItem
-              to="/settings"
-              icon={Settings}
-              label="Settings"
-              collapsed={collapsed}
-              onClick={mobile ? onClose : undefined}
-            />
+          <div className="mt-4">
+            <nav className="space-y-0.5">{renderNav([{ to: "/settings", label: "Settings", icon: Settings }])}</nav>
+          </div>
+        </div>
 
-            {/* Desktop collapse toggle — hidden on mobile */}
-            {!mobile && onToggle && (
-              <button
-                onClick={onToggle}
-                className={cn(
-                  "w-full flex items-center py-2 rounded-md text-sm font-medium transition-colors",
-                  "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                  collapsed ? "justify-center px-2" : "gap-3 px-3"
-                )}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4 shrink-0" />
-                ) : (
-                  <>
-                    <ChevronLeft className="h-4 w-4 shrink-0" />
-                    <span>Collapse</span>
-                  </>
-                )}
-              </button>
+        <div className="border-t border-sidebar-border p-2 space-y-1 shrink-0">
+          <button
+            onClick={toggleTheme}
+            className={cn(
+              "w-full flex items-center gap-3 rounded-md px-2.5 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent",
+              collapsed && "justify-center",
             )}
-          </nav>
+            title={`Theme: ${theme}`}
+          >
+            {isDark ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+            {!collapsed && <span className="truncate">{isDark ? "Light mode" : "Dark mode"}</span>}
+          </button>
+
+          {collapsed && showCollapseToggle ? (
+            <button
+              onClick={() => setCollapsed(false)}
+              className="w-full flex justify-center rounded-md py-2 text-muted-foreground hover:bg-sidebar-accent"
+              aria-label="Expand sidebar"
+            >
+              <ChevronLeft className="h-4 w-4 rotate-180" />
+            </button>
+          ) : !collapsed ? (
+            <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
+              <Avatar name={user?.username ?? user?.email ?? "?"} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium truncate">{user?.username ?? "—"}</p>
+                <p className="text-[11px] text-muted-foreground truncate capitalize">{user?.role ?? "—"}</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="p-1 rounded text-muted-foreground hover:text-destructive"
+                aria-label="Logout"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
     </TooltipProvider>

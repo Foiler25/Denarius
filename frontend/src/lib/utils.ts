@@ -44,3 +44,15 @@ export function currentMonthParam(tz: string): string {
   const today = todayString(tz);
   return today.slice(0, 7) + "-01";
 }
+
+export function initials(name?: string | null): string {
+  if (!name) return "?";
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  const atIdx = trimmed.indexOf("@");
+  const base = atIdx > 0 ? trimmed.slice(0, atIdx) : trimmed;
+  const parts = base.split(/[\s._-]+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}

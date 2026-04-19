@@ -17,6 +17,8 @@ startup-shutdown
 .gemini/
 .grepai/
 .dual-graph/
+nimbalyst-local/
+._*
 
 # macOS / exFAT artifacts
 ._*

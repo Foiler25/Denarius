@@ -21,6 +21,10 @@ COPY nginx/nginx.conf /etc/nginx/conf.d/default.conf
 # Copy built React app
 COPY --from=builder /app/dist /usr/share/nginx/html
 
+# Source mounts on macOS exFAT can land with 700 perms — make assets world-readable for nginx
+RUN find /usr/share/nginx/html -type d -exec chmod 755 {} + \
+ && find /usr/share/nginx/html -type f -exec chmod 644 {} +
+
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]
