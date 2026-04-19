@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,6 +77,22 @@ export default function CategoriesPage() {
   const [txDialog, setTxDialog] = useState<{ id: string; name: string } | null>(null);
 
   const categoryList: Category[] = Array.isArray(categories) ? categories : [];
+
+  // Auto-open the Transactions dialog when arriving from the global search
+  // (/categories?open=<id>). Fires once per navigation.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get("open");
+  const consumedOpen = useRef(false);
+  useEffect(() => {
+    if (consumedOpen.current || !openId || categoryList.length === 0) return;
+    const cat = categoryList.find((c) => c.id === openId);
+    if (cat) {
+      setTxDialog({ id: cat.id, name: cat.name });
+      consumedOpen.current = true;
+      searchParams.delete("open");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [openId, categoryList, searchParams, setSearchParams]);
 
   function openAdd() {
     setEditCategory(null);

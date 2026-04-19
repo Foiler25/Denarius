@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2, CheckCircle, ToggleLeft, ToggleRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -841,7 +841,29 @@ function RecurringCard({
   );
 }
 
+const VALID_TABS = ["subscription", "bill", "income"] as const;
+type RecurringTabValue = (typeof VALID_TABS)[number];
+
 export default function RecurringPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<RecurringTabValue>("bill");
+
+  // Honor /recurring?tab=<value> when arriving from the global search.
+  // Fires once per navigation; param is cleared after consumption.
+  const consumedTab = useRef(false);
+  useEffect(() => {
+    if (consumedTab.current) return;
+    const t = searchParams.get("tab");
+    if (t && (VALID_TABS as readonly string[]).includes(t)) {
+      consumedTab.current = true;
+      setActiveTab(t as RecurringTabValue);
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
@@ -855,7 +877,7 @@ export default function RecurringPage() {
         <RecurringSummaryCard type="income" />
       </div>
 
-      <Tabs defaultValue="bill">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as RecurringTabValue)}>
         <TabsList>
           <TabsTrigger value="subscription">Subscriptions</TabsTrigger>
           <TabsTrigger value="bill">Bills</TabsTrigger>

@@ -11,7 +11,7 @@ import {
   RotateCcw,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/api/client";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,8 @@ interface SearchResult {
   type: ResultType;
   title: string;
   subtitle?: string;
+  /** Per-type extras needed by the navigation handler (recurring tab, txn description, …). */
+  meta?: { recurringType?: string };
 }
 
 const RECENT_KEY = "denarius.recent-searches";
@@ -42,34 +44,64 @@ function pushRecent(q: string) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(next));
 }
 
-const TYPE_META: Record<ResultType, { icon: LucideIcon; route: (id: string) => string; label: string }> = {
-  transaction: { icon: ArrowLeftRight, route: () => "/transactions", label: "Transaction" },
-  account: { icon: Wallet, route: () => "/accounts", label: "Account" },
-  expense_account: { icon: ShoppingCart, route: () => "/expense-accounts", label: "Expense Acct" },
-  category: { icon: Tag, route: () => "/categories", label: "Category" },
-  recurring: { icon: RotateCcw, route: () => "/recurring", label: "Recurring" },
+const TYPE_ORDER: ResultType[] = ["transaction", "account", "expense_account", "category", "recurring"];
+
+const TYPE_META: Record<
+  ResultType,
+  {
+    icon: LucideIcon;
+    label: string;
+    sectionLabel: string;
+    route: (r: SearchResult) => string;
+  }
+> = {
+  transaction: {
+    icon: ArrowLeftRight,
+    label: "Transaction",
+    sectionLabel: "Transactions",
+    route: (r) => `/transactions?highlight=${r.id}&q=${encodeURIComponent(r.title)}`,
+  },
+  account: {
+    icon: Wallet,
+    label: "Account",
+    sectionLabel: "Accounts",
+    route: (r) => `/accounts?open=${r.id}`,
+  },
+  expense_account: {
+    icon: ShoppingCart,
+    label: "Expense Acct",
+    sectionLabel: "Expense Accounts",
+    route: (r) => `/expense-accounts?open=${r.id}`,
+  },
+  category: {
+    icon: Tag,
+    label: "Category",
+    sectionLabel: "Categories",
+    route: (r) => `/categories?open=${r.id}`,
+  },
+  recurring: {
+    icon: RotateCcw,
+    label: "Recurring",
+    sectionLabel: "Recurring",
+    route: (r) => `/recurring${r.meta?.recurringType ? `?tab=${r.meta.recurringType}` : ""}`,
+  },
 };
 
-interface PaletteData {
-  transactions: Array<{ id: string; description?: string; date?: string; amount?: number; account_name?: string }>;
+interface StaticPaletteData {
   accounts: Array<{ id: string; name: string; type?: string }>;
   expense_accounts: Array<{ id: string; name: string }>;
   categories: Array<{ id: string; name: string; type?: string }>;
   recurring: Array<{ id: string; name: string; type?: string; amount?: number }>;
 }
 
-async function fetchPaletteData(): Promise<PaletteData> {
-  const [tx, ac, ex, ca, rc] = await Promise.all([
-    api.get("/transactions", { params: { limit: 200 } }).then((r) => r.data).catch(() => []),
+async function fetchStaticData(): Promise<StaticPaletteData> {
+  const [ac, ex, ca, rc] = await Promise.all([
     api.get("/accounts").then((r) => r.data).catch(() => []),
     api.get("/expense-accounts").then((r) => r.data).catch(() => []),
     api.get("/categories").then((r) => r.data).catch(() => []),
     api.get("/recurring", { params: { is_active: true } }).then((r) => r.data).catch(() => []),
   ]);
-
-  const txList = Array.isArray(tx) ? tx : Array.isArray(tx?.items) ? tx.items : [];
   return {
-    transactions: txList,
     accounts: Array.isArray(ac) ? ac : [],
     expense_accounts: Array.isArray(ex) ? ex : [],
     categories: Array.isArray(ca) ? ca : [],
@@ -77,52 +109,88 @@ async function fetchPaletteData(): Promise<PaletteData> {
   };
 }
 
-function rankResults(data: PaletteData | undefined, q: string): SearchResult[] {
-  if (!data) return [];
-  const needle = q.trim().toLowerCase();
-  if (!needle) return [];
+interface TxRow {
+  id: string;
+  description?: string;
+  date?: string;
+  amount?: number;
+  account_name?: string;
+}
+
+async function fetchTransactionMatches(q: string): Promise<TxRow[]> {
+  const trimmed = q.trim();
+  if (!trimmed) return [];
+  const r = await api
+    .get("/transactions", { params: { search: trimmed, limit: 50, page: 1 } })
+    .catch(() => ({ data: { items: [] } }));
+  const data = r.data;
+  return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+}
+
+function rankResults(
+  needle: string,
+  staticData: StaticPaletteData | undefined,
+  txMatches: TxRow[],
+): SearchResult[] {
+  const trimmed = needle.trim().toLowerCase();
+  if (!trimmed) return [];
 
   const out: SearchResult[] = [];
 
-  for (const t of data.transactions) {
-    const desc = (t.description ?? "").toLowerCase();
-    if (desc.includes(needle)) {
-      out.push({
-        id: t.id,
-        type: "transaction",
-        title: t.description ?? "(no description)",
-        subtitle: [t.date, t.account_name, t.amount != null ? `$${Number(t.amount).toFixed(2)}` : null].filter(Boolean).join(" · "),
-      });
-      if (out.length > 40) break;
-    }
+  for (const t of txMatches) {
+    out.push({
+      id: t.id,
+      type: "transaction",
+      title: t.description ?? "(no description)",
+      subtitle: [t.date, t.account_name, t.amount != null ? `$${Number(t.amount).toFixed(2)}` : null]
+        .filter(Boolean)
+        .join(" · "),
+    });
   }
-  for (const a of data.accounts) {
-    if (a.name.toLowerCase().includes(needle)) {
-      out.push({ id: a.id, type: "account", title: a.name, subtitle: a.type });
+
+  if (staticData) {
+    for (const a of staticData.accounts) {
+      if (a.name.toLowerCase().includes(trimmed)) {
+        out.push({ id: a.id, type: "account", title: a.name, subtitle: a.type });
+      }
     }
-  }
-  for (const e of data.expense_accounts) {
-    if (e.name.toLowerCase().includes(needle)) {
-      out.push({ id: e.id, type: "expense_account", title: e.name });
+    for (const e of staticData.expense_accounts) {
+      if (e.name.toLowerCase().includes(trimmed)) {
+        out.push({ id: e.id, type: "expense_account", title: e.name });
+      }
     }
-  }
-  for (const c of data.categories) {
-    if (c.name.toLowerCase().includes(needle)) {
-      out.push({ id: c.id, type: "category", title: c.name, subtitle: c.type });
+    for (const c of staticData.categories) {
+      if (c.name.toLowerCase().includes(trimmed)) {
+        out.push({ id: c.id, type: "category", title: c.name, subtitle: c.type });
+      }
     }
-  }
-  for (const r of data.recurring) {
-    if (r.name.toLowerCase().includes(needle)) {
-      out.push({
-        id: r.id,
-        type: "recurring",
-        title: r.name,
-        subtitle: [r.type, r.amount != null ? `$${Number(r.amount).toFixed(2)}` : null].filter(Boolean).join(" · "),
-      });
+    for (const r of staticData.recurring) {
+      if (r.name.toLowerCase().includes(trimmed)) {
+        out.push({
+          id: r.id,
+          type: "recurring",
+          title: r.name,
+          subtitle: [r.type, r.amount != null ? `$${Number(r.amount).toFixed(2)}` : null]
+            .filter(Boolean)
+            .join(" · "),
+          meta: { recurringType: r.type },
+        });
+      }
     }
   }
 
-  return out.slice(0, 50);
+  // Stable ordering by section
+  out.sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type));
+  return out.slice(0, 80);
+}
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
 }
 
 interface Props {
@@ -136,13 +204,25 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const listContainerRef = useRef<HTMLDivElement>(null);
 
-  const { data, isFetching } = useQuery({
-    queryKey: ["command-palette"],
-    queryFn: fetchPaletteData,
+  const debouncedQ = useDebouncedValue(q, 200);
+
+  const { data: staticData, isFetching: staticFetching } = useQuery({
+    queryKey: ["palette-static"],
+    queryFn: fetchStaticData,
     enabled: open,
     staleTime: 30_000,
   });
+
+  const { data: txMatches = [], isFetching: txFetching } = useQuery({
+    queryKey: ["palette-tx", debouncedQ],
+    queryFn: () => fetchTransactionMatches(debouncedQ),
+    enabled: open && debouncedQ.trim().length > 0,
+    staleTime: 30_000,
+  });
+
+  const isFetching = staticFetching || txFetching;
 
   useEffect(() => {
     if (open) {
@@ -154,15 +234,22 @@ export function CommandPalette({ open, onOpenChange }: Props) {
     }
   }, [open]);
 
-  const list = useMemo(() => rankResults(data, q), [data, q]);
+  const list = useMemo(() => rankResults(debouncedQ, staticData, txMatches), [debouncedQ, staticData, txMatches]);
 
   useEffect(() => {
     setSelectedIdx(0);
-  }, [q]);
+  }, [debouncedQ]);
+
+  // Keep the highlighted row visible when arrow-keying through long lists
+  useEffect(() => {
+    if (!open) return;
+    const node = listContainerRef.current?.querySelector<HTMLElement>(`[data-idx="${selectedIdx}"]`);
+    node?.scrollIntoView({ block: "nearest" });
+  }, [selectedIdx, open, list]);
 
   const choose = (r: SearchResult) => {
     pushRecent(q);
-    navigate(TYPE_META[r.type].route(r.id));
+    navigate(TYPE_META[r.type].route(r));
     onOpenChange(false);
   };
 
@@ -206,7 +293,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             </kbd>
           </div>
 
-          <div className="max-h-[50vh] overflow-y-auto">
+          <div ref={listContainerRef} className="max-h-[50vh] overflow-y-auto">
             {!q && recent.length > 0 && (
               <div className="py-2">
                 <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -231,24 +318,32 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             {list.map((r, i) => {
               const meta = TYPE_META[r.type];
               const Icon = meta.icon;
+              const prev = list[i - 1];
+              const showHeader = !prev || prev.type !== r.type;
               return (
-                <button
-                  key={`${r.type}-${r.id}`}
-                  onClick={() => choose(r)}
-                  onMouseEnter={() => setSelectedIdx(i)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm",
-                    i === selectedIdx && "bg-[var(--ea-accent-soft)] dark:bg-muted",
+                <Fragment key={`${r.type}-${r.id}`}>
+                  {showHeader && (
+                    <div className="px-4 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {meta.sectionLabel}
+                    </div>
                   )}
-                >
-                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{r.title}</p>
-                    {r.subtitle && <p className="truncate text-xs text-muted-foreground">{r.subtitle}</p>}
-                  </div>
-                  <span className="text-[10px] uppercase text-muted-foreground">{meta.label}</span>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                </button>
+                  <button
+                    data-idx={i}
+                    onClick={() => choose(r)}
+                    onMouseEnter={() => setSelectedIdx(i)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm",
+                      i === selectedIdx && "bg-[var(--ea-accent-soft)] dark:bg-muted",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{r.title}</p>
+                      {r.subtitle && <p className="truncate text-xs text-muted-foreground">{r.subtitle}</p>}
+                    </div>
+                    <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                </Fragment>
               );
             })}
           </div>

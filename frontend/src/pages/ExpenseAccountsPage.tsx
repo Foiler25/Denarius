@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -55,6 +56,22 @@ export default function ExpenseAccountsPage() {
   const [txDialog, setTxDialog] = useState<{ id: string; name: string } | null>(null);
 
   const accountList: ExpenseAccountOut[] = Array.isArray(accounts) ? accounts : [];
+
+  // Auto-open the Transactions dialog when arriving from the global search
+  // (/expense-accounts?open=<id>). Fires once per navigation.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const openId = searchParams.get("open");
+  const consumedOpen = useRef(false);
+  useEffect(() => {
+    if (consumedOpen.current || !openId || accountList.length === 0) return;
+    const acc = accountList.find((a) => a.id === openId);
+    if (acc) {
+      setTxDialog({ id: acc.id, name: acc.name });
+      consumedOpen.current = true;
+      searchParams.delete("open");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [openId, accountList, searchParams, setSearchParams]);
 
   function openAdd() {
     setEditAccount(null);

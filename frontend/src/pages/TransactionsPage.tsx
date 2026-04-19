@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Pencil, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -109,7 +109,7 @@ function currentMonthDates(tz: string) {
 
 export default function TransactionsPage() {
   const { timezone } = useSettingsStore();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -118,6 +118,33 @@ export default function TransactionsPage() {
   const [startDate, setStartDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).start);
   const [endDate, setEndDate] = useState(() => currentMonthDates(useSettingsStore.getState().timezone).end);
   const [page, setPage] = useState(1);
+  const [highlightedTxId, setHighlightedTxId] = useState<string | null>(null);
+
+  // Auto-search + flash a row when arriving from the global search
+  // (/transactions?highlight=<id>&q=<description>). Clears date filters so the
+  // row is reachable regardless of when the transaction occurred.
+  const consumedHighlight = useRef(false);
+  useEffect(() => {
+    if (consumedHighlight.current) return;
+    const highlight = searchParams.get("highlight");
+    if (!highlight) return;
+    consumedHighlight.current = true;
+    const qParam = searchParams.get("q");
+    if (qParam) setSearch(qParam);
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+    setHighlightedTxId(highlight);
+
+    const next = new URLSearchParams(searchParams);
+    next.delete("highlight");
+    next.delete("q");
+    setSearchParams(next, { replace: true });
+
+    const timer = setTimeout(() => setHighlightedTxId(null), 2500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState<TxFormState>(() => emptyForm(useSettingsStore.getState().timezone));
@@ -492,6 +519,7 @@ export default function TransactionsPage() {
                       accounts={accounts as Account[]}
                       expenseAccounts={expenseAccounts as ExpenseAccountOut[]}
                       categories={categories as Category[]}
+                      isHighlighted={tx.id === highlightedTxId}
                       onDelete={() => { setDeleteId(tx.id); setDeleteOpen(true); }}
                     />
                   ))}
@@ -577,9 +605,16 @@ export default function TransactionsPage() {
   );
 }
 
-function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }: { tx: Transaction; accounts: Account[]; expenseAccounts: ExpenseAccountOut[]; categories: Category[]; onDelete: () => void }) {
+function TransactionRow({ tx, accounts, expenseAccounts, categories, isHighlighted, onDelete }: { tx: Transaction; accounts: Account[]; expenseAccounts: ExpenseAccountOut[]; categories: Category[]; isHighlighted?: boolean; onDelete: () => void }) {
   const updateTx = useUpdateTransaction(tx.id);
   const [editOpen, setEditOpen] = useState(false);
+  const rowRef = useRef<HTMLTableRowElement>(null);
+
+  useEffect(() => {
+    if (isHighlighted) {
+      rowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [isHighlighted]);
   const [editForm, setEditForm] = useState<TxFormState>({
     date: tx.date,
     description: tx.description ?? "",
@@ -645,7 +680,13 @@ function TransactionRow({ tx, accounts, expenseAccounts, categories, onDelete }:
   }
 
   return (
-    <tr className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+    <tr
+      ref={rowRef}
+      className={cn(
+        "border-b last:border-0 transition-colors duration-700",
+        isHighlighted ? "bg-[var(--ea-accent-soft)] dark:bg-[var(--ea-accent)]/15" : "hover:bg-muted/30",
+      )}
+    >
       <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{formatDate(tx.date)}</td>
       <td className="px-4 py-3 max-w-[200px]">
         <div className="font-medium truncate">{tx.description}</div>
