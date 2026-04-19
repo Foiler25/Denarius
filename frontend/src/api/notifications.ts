@@ -44,7 +44,7 @@ export function useNotifications() {
       items.push({
         id: `bill-${bill.id}`,
         title: bill.name,
-        subtitle: `${when} · $${bill.amount.toFixed(2)}`,
+        subtitle: `${when} · $${Number(bill.amount).toFixed(2)}`,
         severity: bill.days_until_due === 0 ? "danger" : "warning",
         link: "/recurring",
       });
@@ -55,7 +55,7 @@ export function useNotifications() {
     items.push({
       id: `budget-${alert.id}`,
       title: `${alert.category?.name ?? "Budget"} over limit`,
-      subtitle: `Spent $${alert.actual_spent.toFixed(2)} of $${alert.amount.toFixed(2)}`,
+      subtitle: `Spent $${Number(alert.actual_spent).toFixed(2)} of $${Number(alert.amount).toFixed(2)}`,
       severity: "danger",
       link: "/budgets",
     });
