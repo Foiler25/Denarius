@@ -51,7 +51,7 @@ export function useDeleteBudget() {
 export function useCopyMonth() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { from_month: string; to_month: string }) =>
+    mutationFn: (data: { from_month: string; to_month: string; overwrite?: boolean }) =>
       api.post("/budgets/copy-month", data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["budgets"] });

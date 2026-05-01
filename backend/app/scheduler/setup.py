@@ -9,6 +9,7 @@ scheduler = AsyncIOScheduler()
 
 def register_jobs() -> None:
     from app.scheduler.jobs.auto_post_recurring import auto_post_recurring_job
+    from app.scheduler.jobs.budget_rollover import budget_rollover_job
     from app.scheduler.jobs.net_worth_snapshot import net_worth_snapshot_job
     from app.scheduler.jobs.backup import backup_job
 
@@ -17,6 +18,13 @@ def register_jobs() -> None:
         CronTrigger(hour=0, minute=5),
         id="auto_post_recurring",
         name="Auto-post due recurring items",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        budget_rollover_job,
+        CronTrigger(day=1, hour=0, minute=1),
+        id="budget_rollover",
+        name="Mirror current month budgets to next month",
         replace_existing=True,
     )
     scheduler.add_job(

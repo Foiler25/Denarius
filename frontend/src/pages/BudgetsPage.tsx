@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Pencil, Copy, Trash2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -109,6 +109,13 @@ export default function BudgetsPage() {
   const [copyOpen, setCopyOpen] = useState(false);
   const [copyTarget, setCopyTarget] = useState<string>(() => stepMonth(currentMonthParam(useSettingsStore.getState().timezone), 1));
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [conflictData, setConflictData] = useState<null | {
+    category_count: number;
+    has_total: boolean;
+    from_month: string;
+    to_month: string;
+  }>(null);
+  const [conflictError, setConflictError] = useState<string | null>(null);
 
   // Inline edit
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -124,17 +131,6 @@ export default function BudgetsPage() {
 
   const budgetList: Budget[] = Array.isArray(budgets) ? budgets : [];
   const summaryData: BudgetSummary = summary ?? { total_budgeted: 0, total_spent: 0, uncategorized_spent: 0, over_budget_count: 0 };
-
-  // Auto-copy budgets from previous month when keepBudget is on and current month is empty
-  const autoCopiedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!keepBudget || isLoading || copyMonth.isPending) return;
-    if (budgetList.length === 0 && !autoCopiedRef.current.has(month)) {
-      autoCopiedRef.current.add(month);
-      const prevMonth = stepMonth(month, -1);
-      copyMonth.mutate({ from_month: prevMonth, to_month: month });
-    }
-  }, [month, isLoading, budgetList.length, keepBudget]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleKeepBudgetChange(v: boolean) {
     setPrefs.mutate({ keep_for_next_month: v });
@@ -187,8 +183,46 @@ export default function BudgetsPage() {
     try {
       await copyMonth.mutateAsync({ from_month: month, to_month: copyTarget });
       setCopyOpen(false);
-    } catch {
-      setCopyError("Failed to copy budgets.");
+    } catch (err: unknown) {
+      const axErr = err as {
+        response?: { status?: number; data?: { detail?: unknown } };
+      };
+      const detail = axErr.response?.data?.detail;
+      if (
+        axErr.response?.status === 409 &&
+        detail &&
+        typeof detail === "object" &&
+        (detail as { code?: string }).code === "destination_has_budgets"
+      ) {
+        setConflictData(detail as {
+          category_count: number;
+          has_total: boolean;
+          from_month: string;
+          to_month: string;
+        });
+        setCopyOpen(false);
+      } else if (typeof detail === "string") {
+        setCopyError(detail);
+      } else {
+        setCopyError("Failed to copy budgets.");
+      }
+    }
+  }
+
+  async function handleConfirmOverwrite() {
+    if (!conflictData) return;
+    setConflictError(null);
+    try {
+      await copyMonth.mutateAsync({
+        from_month: conflictData.from_month,
+        to_month: conflictData.to_month,
+        overwrite: true,
+      });
+      setConflictData(null);
+    } catch (err: unknown) {
+      const axErr = err as { response?: { data?: { detail?: unknown } } };
+      const detail = axErr.response?.data?.detail;
+      setConflictError(typeof detail === "string" ? detail : "Failed to overwrite budgets.");
     }
   }
 
@@ -265,6 +299,72 @@ export default function BudgetsPage() {
                   </Button>
                 </DialogFooter>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Copy Month — Overwrite Confirmation */}
+          <Dialog
+            open={conflictData !== null}
+            onOpenChange={(open) => {
+              if (!open) {
+                setConflictData(null);
+                setConflictError(null);
+              }
+            }}
+          >
+            <DialogContent className="max-w-[95vw] sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Overwrite existing budgets?</DialogTitle>
+              </DialogHeader>
+              {conflictData && (
+                <div className="space-y-3 py-2">
+                  {conflictError && (
+                    <div className="rounded-md bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2">
+                      {conflictError}
+                    </div>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {(() => {
+                      const parts: string[] = [];
+                      if (conflictData.category_count > 0) {
+                        parts.push(
+                          `${conflictData.category_count} category budget${conflictData.category_count === 1 ? "" : "s"}`,
+                        );
+                      }
+                      if (conflictData.has_total) parts.push("a monthly total");
+                      const subject = parts.join(" and ") || "budgets";
+                      return (
+                        <>
+                          {subject} already exist for{" "}
+                          <strong>{formatMonth(conflictData.to_month)}</strong>. Copying from{" "}
+                          <strong>{formatMonth(conflictData.from_month)}</strong> will overwrite
+                          them. Continue?
+                        </>
+                      );
+                    })()}
+                  </p>
+                </div>
+              )}
+              <DialogFooter className="mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setConflictData(null);
+                    setConflictError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleConfirmOverwrite}
+                  disabled={copyMonth.isPending}
+                >
+                  {copyMonth.isPending ? "Overwriting…" : "Overwrite"}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
 

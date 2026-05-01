@@ -30,11 +30,10 @@ from app.schemas.budget import (
     MonthlyTargetOut,
     MonthlyTargetSet,
 )
+from app.services import budget_sync
 from app.utils.date_utils import first_of_month
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
-
-_KEEP_PREF_KEY = "keep_for_next_month"
 
 
 async def _budgets_with_spent(month: date, db: AsyncSession) -> list[BudgetWithSpent]:
@@ -107,6 +106,16 @@ async def create_or_update_budget(
         budget = Budget(category_id=data.category_id, month=month_start, amount=data.amount)
         db.add(budget)
     await db.commit()
+
+    if await budget_sync.is_keep_enabled(db) and await budget_sync.is_current_month(db, month_start):
+        await budget_sync.upsert_category_budget(
+            db,
+            category_id=data.category_id,
+            month=budget_sync.next_month(month_start),
+            amount=data.amount,
+        )
+        await db.commit()
+
     result = await db.execute(
         select(Budget).options(selectinload(Budget.category)).where(Budget.id == budget.id)
     )
@@ -209,6 +218,13 @@ async def set_monthly_target(
         row = MonthlyBudgetTotal(month=month_start, amount=data.amount)
         db.add(row)
     await db.commit()
+
+    if await budget_sync.is_keep_enabled(db) and await budget_sync.is_current_month(db, month_start):
+        await budget_sync.upsert_monthly_total(
+            db, month=budget_sync.next_month(month_start), amount=data.amount
+        )
+        await db.commit()
+
     return MonthlyTargetOut(month=row.month, amount=float(row.amount))
 
 
@@ -227,6 +243,12 @@ async def delete_monthly_target(
         await db.delete(row)
         await db.commit()
 
+        if await budget_sync.is_keep_enabled(db) and await budget_sync.is_current_month(db, month_start):
+            await budget_sync.delete_monthly_total(
+                db, month=budget_sync.next_month(month_start)
+            )
+            await db.commit()
+
 
 @router.get("/preferences", response_model=BudgetPrefsOut)
 async def get_budget_preferences(
@@ -234,7 +256,7 @@ async def get_budget_preferences(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(AppSetting).where(AppSetting.key == _KEEP_PREF_KEY)
+        select(AppSetting).where(AppSetting.key == budget_sync.KEEP_PREF_KEY)
     )
     row = result.scalar_one_or_none()
     return BudgetPrefsOut(keep_for_next_month=row.value == "true" if row else False)
@@ -247,17 +269,27 @@ async def set_budget_preferences(
     current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(AppSetting).where(AppSetting.key == _KEEP_PREF_KEY)
+        select(AppSetting).where(AppSetting.key == budget_sync.KEEP_PREF_KEY)
     )
     row = result.scalar_one_or_none()
-    val = "true" if data.keep_for_next_month else "false"
+    was_on = (row.value == "true") if row else False
+    now_on = data.keep_for_next_month
+    val = "true" if now_on else "false"
     if row:
         row.value = val
     else:
-        row = AppSetting(key=_KEEP_PREF_KEY, value=val)
+        row = AppSetting(key=budget_sync.KEEP_PREF_KEY, value=val)
         db.add(row)
     await db.commit()
-    return BudgetPrefsOut(keep_for_next_month=data.keep_for_next_month)
+
+    if not was_on and now_on:
+        await budget_sync.mirror_current_to_next(db)
+        await db.commit()
+    elif was_on and not now_on:
+        await budget_sync.clear_next_month(db)
+        await db.commit()
+
+    return BudgetPrefsOut(keep_for_next_month=now_on)
 
 
 @router.get("/{budget_id}", response_model=BudgetOut)
@@ -277,8 +309,20 @@ async def update_budget(
     current_user: User = Depends(get_current_user),
 ):
     budget = await _get_or_404(budget_id, db)
+    category_id = budget.category_id
+    month = budget.month
     budget.amount = data.amount
     await db.commit()
+
+    if await budget_sync.is_keep_enabled(db) and await budget_sync.is_current_month(db, month):
+        await budget_sync.upsert_category_budget(
+            db,
+            category_id=category_id,
+            month=budget_sync.next_month(month),
+            amount=data.amount,
+        )
+        await db.commit()
+
     result = await db.execute(
         select(Budget).options(selectinload(Budget.category)).where(Budget.id == budget_id)
     )
@@ -292,8 +336,16 @@ async def delete_budget(
     current_user: User = Depends(get_current_user),
 ):
     budget = await _get_or_404(budget_id, db)
+    category_id = budget.category_id
+    month = budget.month
     await db.delete(budget)
     await db.commit()
+
+    if await budget_sync.is_keep_enabled(db) and await budget_sync.is_current_month(db, month):
+        await budget_sync.delete_category_budget(
+            db, category_id=category_id, month=budget_sync.next_month(month)
+        )
+        await db.commit()
 
 
 @router.post("/copy-month", response_model=list[BudgetOut])
@@ -304,6 +356,27 @@ async def copy_month(
 ):
     from_month = first_of_month(data.from_month)
     to_month = first_of_month(data.to_month)
+
+    if not data.overwrite:
+        existing_count = await db.scalar(
+            select(func.count()).select_from(Budget).where(Budget.month == to_month)
+        ) or 0
+        existing_target_row = await db.scalar(
+            select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == to_month)
+        )
+        has_total = existing_target_row is not None
+        if existing_count > 0 or has_total:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "destination_has_budgets",
+                    "category_count": int(existing_count),
+                    "has_total": has_total,
+                    "from_month": from_month.isoformat(),
+                    "to_month": to_month.isoformat(),
+                },
+            )
+
     source_result = await db.execute(
         select(Budget).where(Budget.month == from_month)
     )
@@ -321,16 +394,18 @@ async def copy_month(
             db.add(b)
         created.append(b)
 
-    # Copy monthly target if source has one and target doesn't
+    # Copy monthly target if source has one (overwriting any existing destination total).
     source_target = await db.execute(
         select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == from_month)
     )
     src_target = source_target.scalar_one_or_none()
     if src_target:
-        existing_target = await db.execute(
+        existing_target_row = await db.scalar(
             select(MonthlyBudgetTotal).where(MonthlyBudgetTotal.month == to_month)
         )
-        if not existing_target.scalar_one_or_none():
+        if existing_target_row:
+            existing_target_row.amount = src_target.amount
+        else:
             db.add(MonthlyBudgetTotal(month=to_month, amount=src_target.amount))
 
     await db.commit()

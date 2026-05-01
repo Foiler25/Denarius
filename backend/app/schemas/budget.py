@@ -42,6 +42,7 @@ class BudgetSummary(BaseModel):
 class CopyMonthRequest(BaseModel):
     from_month: date
     to_month: date
+    overwrite: bool = False
 
 
 class MonthlyTargetOut(BaseModel):
