@@ -18,10 +18,13 @@ depends_on = None
 
 
 def upgrade():
+    # Postgres rejects `role::text` in an index expression because the enum_out
+    # cast is only STABLE, not IMMUTABLE. Index on the enum column itself —
+    # equality on the literal value is fine in the WHERE clause.
     op.execute(
         """
         CREATE UNIQUE INDEX IF NOT EXISTS one_admin_idx
-        ON users ((role::text))
+        ON users (role)
         WHERE role = 'admin' AND deleted_at IS NULL
         """
     )
