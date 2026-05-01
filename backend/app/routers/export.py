@@ -24,6 +24,8 @@ from app.models.user import User
 
 router = APIRouter(tags=["export"])
 
+MAX_IMPORT_BYTES = 10 * 1024 * 1024  # 10 MB — matches nginx client_max_body_size
+
 
 # ---------------------------------------------------------------------------
 # EXPORT
@@ -237,7 +239,13 @@ async def import_data(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    raw = await file.read()
+    if file.size is not None and file.size > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail=f"Import file exceeds {MAX_IMPORT_BYTES // (1024 * 1024)} MB limit")
+
+    raw = await file.read(MAX_IMPORT_BYTES + 1)
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail=f"Import file exceeds {MAX_IMPORT_BYTES // (1024 * 1024)} MB limit")
+
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:

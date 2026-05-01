@@ -11,6 +11,7 @@ from app.models.category import Category
 from app.models.mortgage_detail import MortgageDetail
 from app.models.recurring_item import RecurringItem
 from app.models.transaction import Transaction, TransactionType
+from app.utils.app_date import get_app_date
 from app.utils.date_utils import advance_by_frequency, rewind_by_frequency
 
 
@@ -95,14 +96,11 @@ async def mark_paid(
         src_txn.paired_transaction_id = mtg_txn.id
         mtg_txn.paired_transaction_id = src_txn.id
 
-        await db.commit()
-        await db.refresh(src_txn)
-
         item.last_paid_date = txn_date
         item.last_paid_amount = txn_amount
         item.last_paid_transaction_id = src_txn.id
-        await db.commit()
 
+        await db.commit()
         return src_txn
 
     # Normal bill/subscription/income: single transaction
@@ -156,7 +154,7 @@ async def mark_paid_no_transaction(
 
 
 async def auto_post_due_items(db: AsyncSession) -> int:
-    today = date.today()
+    today = await get_app_date(db)
     result = await db.execute(
         select(RecurringItem).where(
             RecurringItem.auto_post == True,
@@ -166,7 +164,8 @@ async def auto_post_due_items(db: AsyncSession) -> int:
         )
     )
     items = result.scalars().all()
-    posted = 0
+
+    pairs: list[tuple[RecurringItem, Transaction]] = []
     for item in items:
         txn_type = TransactionType.income if item.type.value == "income" else TransactionType.expense
         txn = Transaction(
@@ -181,16 +180,29 @@ async def auto_post_due_items(db: AsyncSession) -> int:
             created_by=item.created_by,
         )
         db.add(txn)
+
+        account = await db.get(Account, item.account_id)
+        if account:
+            if txn_type == TransactionType.expense:
+                account.current_balance -= item.amount
+            else:
+                account.current_balance += item.amount
+
         prev_due = item.next_due_date
         item.next_due_date = advance_by_frequency(item.next_due_date, item.frequency)
         item.last_paid_date = prev_due
         item.last_paid_amount = item.amount
-        item.last_paid_transaction_id = None  # refreshed after commit below
-        posted += 1
+        pairs.append((item, txn))
 
-    if posted:
-        await db.commit()
-    return posted
+    if not pairs:
+        return 0
+
+    await db.flush()
+    for item, txn in pairs:
+        item.last_paid_transaction_id = txn.id
+
+    await db.commit()
+    return len(pairs)
 
 
 def _amount_in_range(txn_amount: Decimal, item: RecurringItem) -> bool:

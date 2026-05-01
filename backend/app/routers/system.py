@@ -1,6 +1,3 @@
-from datetime import date, datetime
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -11,21 +8,9 @@ from app.models.app_setting import AppSetting
 from app.models.user import User
 from app.scheduler.setup import scheduler
 from app.services.backup_service import list_backups, run_backup
+from app.utils.app_date import _TZ_KEY, get_app_date  # noqa: F401  (re-exported)
 
 router = APIRouter(prefix="/system", tags=["system"])
-
-_TZ_KEY = "timezone"
-
-
-async def get_app_date(db: AsyncSession) -> date:
-    """Return today's date in the app-configured timezone."""
-    row = await db.scalar(select(AppSetting).where(AppSetting.key == _TZ_KEY))
-    tz_str = row.value if row else "UTC"
-    try:
-        tz = ZoneInfo(tz_str)
-    except ZoneInfoNotFoundError:
-        tz = ZoneInfo("UTC")
-    return datetime.now(tz).date()
 
 
 class TimezoneUpdate(BaseModel):

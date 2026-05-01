@@ -144,25 +144,26 @@ async def create_transaction(
         elif data.type == TransactionType.income:
             account.current_balance += data.amount
         elif data.type == TransactionType.transfer and data.transfer_account_id:
+            dest = await db.get(Account, data.transfer_account_id)
+            if not dest or dest.deleted_at is not None:
+                raise HTTPException(status_code=400, detail="Destination account not found")
             txn.type = TransactionType.expense
             account.current_balance -= data.amount
-            dest = await db.get(Account, data.transfer_account_id)
-            if dest:
-                dest.current_balance += data.amount
-                dest_txn = Transaction(
-                    account_id=data.transfer_account_id,
-                    transfer_account_id=data.account_id,
-                    amount=data.amount,
-                    type=TransactionType.income,
-                    description=data.description,
-                    notes=data.notes,
-                    date=data.date,
-                    created_by=current_user.id,
-                )
-                db.add(dest_txn)
-                await db.flush()
-                txn.paired_transaction_id = dest_txn.id
-                dest_txn.paired_transaction_id = txn.id
+            dest.current_balance += data.amount
+            dest_txn = Transaction(
+                account_id=data.transfer_account_id,
+                transfer_account_id=data.account_id,
+                amount=data.amount,
+                type=TransactionType.income,
+                description=data.description,
+                notes=data.notes,
+                date=data.date,
+                created_by=current_user.id,
+            )
+            db.add(dest_txn)
+            await db.flush()
+            txn.paired_transaction_id = dest_txn.id
+            dest_txn.paired_transaction_id = txn.id
 
     # Auto-match to a recurring item if one is configured for this transaction.
     # extra_payment skips matching (standalone payment, don't advance next_due_date).

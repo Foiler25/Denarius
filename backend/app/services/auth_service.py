@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.refresh_token import RefreshToken
@@ -30,14 +31,32 @@ async def register_user(request: RegisterRequest, db: AsyncSession) -> tuple[Use
     user_count = count_result.scalar()
     role = UserRole.admin if user_count == 0 else UserRole.member
 
-    user = User(
-        username=request.username,
-        email=request.email,
-        password_hash=hash_password(request.password),
-        role=role,
-    )
-    db.add(user)
-    await db.flush()
+    password_hash = hash_password(request.password)
+
+    try:
+        user = User(
+            username=request.username,
+            email=request.email,
+            password_hash=password_hash,
+            role=role,
+        )
+        db.add(user)
+        await db.flush()
+    except IntegrityError:
+        # Race with another concurrent registration claiming admin
+        # (partial unique index `one_admin_idx` enforces at most one admin).
+        # Fall back to member role.
+        await db.rollback()
+        if role != UserRole.admin:
+            raise
+        user = User(
+            username=request.username,
+            email=request.email,
+            password_hash=password_hash,
+            role=UserRole.member,
+        )
+        db.add(user)
+        await db.flush()
 
     access_token, raw_refresh = await _issue_tokens(user, db)
     await db.commit()
