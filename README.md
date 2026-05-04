@@ -1,35 +1,32 @@
 # Denarius
 
-Self-hosted personal finance tracker for families. Built for deployment on Umbrel OS via Docker Compose, accessible through Tailscale.
+Self-hosted personal finance tracker for families. Deploys via Docker Compose; ideal for use over a private network or behind a VPN such as Tailscale or WireGuard.
+
+> **Status:** v0.9.0 — pre-release. Functional and stable for personal use; expect occasional breaking schema changes until 1.0.
 
 ## Features
 
 - **Dashboard** — Net worth, monthly spending, upcoming bills, recent transactions
 - **Transactions** — Manual entry, CSV export, filtering by date/category/account
-- **Budgets** — Monthly per-category budgets with progress tracking
+- **Budgets** — Monthly per-category budgets with progress tracking and rollover
 - **Recurring & Subscriptions** — Subscriptions (Netflix, Spotify), recurring bills, due date alerts, auto-posting
 - **Mortgage** — Amortization schedule, extra payment calculator
 - **Net Worth** — Assets vs liabilities, historical chart, monthly auto-snapshot
 - **Reports** — Spending by category (pie), income vs expense (bar), monthly trends
 - **Multi-user** — Family members share data; first user becomes admin
-- **REST API** — Full OpenAPI documentation at `/api/docs`
+- **REST API** — Full OpenAPI documentation at `/api/docs` (development only)
 
 ## Quick Start
 
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/yourusername/denarius.git
-cd denarius
+git clone https://github.com/foiler25/Denarius.git
+cd Denarius
 cp .env.example .env
 ```
 
-Edit `.env` and set:
-```
-POSTGRES_PASSWORD=your_strong_password
-JWT_SECRET=$(openssl rand -hex 32)
-ALLOWED_ORIGINS=http://YOUR_TAILSCALE_IP:9723
-```
+`.env` is optional — sensible defaults are baked in and the database password and JWT secret auto-generate on first run. Edit it only if you want to override something (e.g. `APP_PORT` or `ALLOWED_ORIGINS`).
 
 ### 2. Start
 
@@ -37,52 +34,70 @@ ALLOWED_ORIGINS=http://YOUR_TAILSCALE_IP:9723
 docker compose up -d
 ```
 
-The app will be available at `http://localhost:9723`
+The app will be available at `http://localhost:9723`.
 
 ### 3. First Login
 
-Open the app and register your first account — it will automatically be assigned the **admin** role.
+Open the app and register your first account — it is automatically assigned the **admin** role. Subsequent registrations are members until promoted from the Users tab.
 
-## Umbrel Installation
+## Deploying with Portainer
 
-### Option A: docker-compose (manual)
+Denarius can be deployed as a Portainer **Stack** in a few clicks.
 
-SSH into your Umbrel server and run:
+### Option A: Git-based stack (recommended)
+
+1. In Portainer, go to **Stacks → Add stack**.
+2. Give it a name (e.g. `denarius`).
+3. Select **Repository** as the build method and use:
+   - **Repository URL**: `https://github.com/foiler25/Denarius`
+   - **Reference**: `refs/heads/main`
+   - **Compose path**: `docker-compose.yml`
+4. Under **Environment variables**, optionally add any of the variables listed in the [Environment Variables](#environment-variables) table. None are required — defaults work out of the box.
+5. Click **Deploy the stack**.
+
+Portainer will pull the repo, build the images, and bring the stack up. The web UI will be reachable on the host at `http://<host-ip>:9723` (or the value of `APP_PORT`).
+
+### Option B: Web editor
+
+1. **Stacks → Add stack → Web editor**.
+2. Paste the contents of [`docker-compose.yml`](./docker-compose.yml) into the editor.
+3. Add environment variables as needed.
+4. Deploy.
+
+> **Note:** the web-editor option requires the `./backend` and `./backup` build contexts to be available on the Docker host. The Git-based option is easier because Portainer fetches the full repo for you.
+
+### Updating the stack
+
+When a new release is published, open the stack in Portainer and click **Pull and redeploy**. Portainer will fetch the latest commit, rebuild any changed images, and restart the services. Your data (Postgres volume, secrets volume, and the `./backups` directory) is preserved across redeploys.
+
+## Remote access via Tailscale / VPN
+
+Denarius binds to a single host port (`9723` by default) and does not ship with TLS — keep it on a trusted network or expose it through a VPN.
+
+For Tailscale users:
 
 ```bash
-git clone https://github.com/yourusername/denarius.git ~/denarius
-cd ~/denarius
-cp .env.example .env
-# Edit .env
-docker compose up -d
+# On the Docker host
+sudo tailscale up
 ```
 
-### Option B: Umbrel Community App Store
+Then open `http://<machine-name>.<tailnet>.ts.net:9723` from any device on your tailnet.
 
-Add the community app store URL in your Umbrel dashboard, then install Denarius from the Finance category.
+If you change the access URL, update `ALLOWED_ORIGINS` in `.env` so CORS still works:
 
-## Tailscale Access
-
-Ensure your Umbrel server is connected to your Tailscale network. Access the app at:
 ```
-http://<tailscale-ip>:9723
+ALLOWED_ORIGINS=http://localhost:9723,http://denarius.tailnet.ts.net:9723
 ```
-
-Or set up a Tailscale MagicDNS hostname and use:
-```
-http://umbrel.your-tailnet.ts.net:9723
-```
-
-Update `ALLOWED_ORIGINS` in `.env` to include your Tailscale address.
 
 ## API Documentation
 
-The REST API is documented at:
+In **development** (`ENVIRONMENT=development`), interactive OpenAPI docs are served at:
+
 ```
 http://localhost:9723/api/docs
 ```
 
-This is a full OpenAPI (Swagger) UI. Future iOS/mobile clients can authenticate using Bearer tokens from the `/api/v1/auth/login` endpoint.
+The docs are disabled in production for security. Mobile or third-party clients can still authenticate via `POST /api/v1/auth/login` and use the bearer token against the documented endpoints.
 
 ## Backups
 
@@ -124,14 +139,32 @@ docker compose up
 # - PostgreSQL port exposed at 5432
 ```
 
+Frontend-only dev (Vite proxies `/api` to `localhost:8000`):
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Backend-only dev:
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
 ## Environment Variables
+
+All variables are optional. The two secrets (`POSTGRES_PASSWORD` and `JWT_SECRET`) are auto-generated on first run and stored in a Docker volume; only override them if you have a specific reason to.
 
 | Variable | Default | Description |
 |---|---|---|
 | `POSTGRES_DB` | `denarius` | Database name |
 | `POSTGRES_USER` | `denarius` | Database user |
-| `POSTGRES_PASSWORD` | — | **Required.** Database password |
-| `JWT_SECRET` | — | **Required.** Secret key for JWT signing (32+ chars) |
+| `POSTGRES_PASSWORD` | _auto-generated_ | Database password (32 random chars on first run) |
+| `JWT_SECRET` | _auto-generated_ | Secret key for JWT signing (64 hex chars on first run) |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | JWT access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `30` | Refresh token lifetime |
 | `ENVIRONMENT` | `production` | `production` or `development` |
@@ -142,10 +175,11 @@ docker compose up
 ## Architecture
 
 ```
-[Tailscale] → :9723 → nginx → /* → React SPA
-                            → /api/* → FastAPI (port 8000)
-                                         ↓
-                                     PostgreSQL 15
+host:9723 → nginx → /*       → React SPA
+                  → /api/*   → FastAPI (port 8000)
+                                  ↓
+                              PostgreSQL 15
+
 backup-cron (pg_dump daily at 02:00 → ./backups/)
 ```
 
@@ -154,3 +188,7 @@ backup-cron (pg_dump daily at 02:00 → ./backups/)
 - Frontend: React 18, Vite, TypeScript, Shadcn/ui, Tailwind CSS, Recharts
 - Database: PostgreSQL 15
 - Proxy: Nginx
+
+## Contributing
+
+Issues and pull requests are welcome at [github.com/foiler25/Denarius](https://github.com/foiler25/Denarius).

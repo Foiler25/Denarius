@@ -740,6 +740,8 @@ function PreferencesTab() {
 }
 
 // ---- Data Tab ----
+const APP_VERSION = "0.9.0";
+
 const EXPORT_ITEMS = [
   { key: "include_categories", label: "Categories" },
   { key: "include_accounts", label: "Accounts" },
@@ -945,6 +947,32 @@ function DataTab() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* About */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            About
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Version</span>
+            <span className="font-mono">{APP_VERSION}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Source</span>
+            <a
+              href="https://github.com/foiler25/Denarius"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-primary hover:underline"
+            >
+              github.com/foiler25/Denarius
+            </a>
+          </div>
         </CardContent>
       </Card>
     </div>
