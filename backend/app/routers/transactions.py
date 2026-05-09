@@ -2,6 +2,7 @@ import csv
 import io
 import uuid
 from datetime import date
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,6 +27,14 @@ from app.services.recurring_service import (
 from app.utils.pagination import PagedResponse
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+
+
+def _signed_effect(txn_type: TransactionType, amount: Decimal) -> Decimal:
+    if txn_type == TransactionType.expense:
+        return -amount
+    if txn_type == TransactionType.income:
+        return amount
+    return Decimal("0")
 
 
 async def _check_once_per_month_transaction(
@@ -239,9 +248,18 @@ async def update_transaction(
     # Snapshot state needed for balance adjustment and transfer counterpart lookup
     old_amount = txn.amount
     old_date = txn.date
+    old_type = txn.type
 
     for field, value in data.model_dump(exclude_none=True, exclude={"once_per_month_override"}).items():
         setattr(txn, field, value)
+
+    if old_type != txn.type and (
+        old_type == TransactionType.transfer or txn.type == TransactionType.transfer
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot change transaction type to/from transfer; delete and recreate instead.",
+        )
 
     await _check_once_per_month_transaction(txn.category_id, txn.date, db, exclude_txn_id=txn.id, override=override)
 
@@ -272,13 +290,12 @@ async def update_transaction(
             dest_txn.notes = txn.notes
             dest_txn.category_id = txn.category_id
 
-    elif amount_delta != 0:
-        account = await db.get(Account, txn.account_id)
-        if account:
-            if txn.type == TransactionType.expense:
-                account.current_balance -= amount_delta
-            elif txn.type == TransactionType.income:
-                account.current_balance += amount_delta
+    else:
+        balance_delta = _signed_effect(txn.type, txn.amount) - _signed_effect(old_type, old_amount)
+        if balance_delta != 0:
+            account = await db.get(Account, txn.account_id)
+            if account:
+                account.current_balance += balance_delta
 
     # If the transaction had no recurring link and the edit might now make it match, re-check
     if not had_recurring and txn.recurring_item_id is None and override != "extra_payment":

@@ -34,6 +34,7 @@ class TransactionUpdate(BaseModel):
     category_id: Optional[uuid.UUID] = None
     expense_account_id: Optional[uuid.UUID] = None
     amount: Optional[Decimal] = None
+    type: Optional[TransactionType] = None
     description: Optional[str] = None
     notes: Optional[str] = None
     date: Optional[_Date] = None
