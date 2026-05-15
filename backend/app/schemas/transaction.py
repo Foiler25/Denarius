@@ -31,6 +31,7 @@ _Date = date
 
 
 class TransactionUpdate(BaseModel):
+    account_id: Optional[uuid.UUID] = None
     category_id: Optional[uuid.UUID] = None
     expense_account_id: Optional[uuid.UUID] = None
     amount: Optional[Decimal] = None

@@ -249,6 +249,7 @@ async def update_transaction(
     old_amount = txn.amount
     old_date = txn.date
     old_type = txn.type
+    old_account_id = txn.account_id
 
     for field, value in data.model_dump(exclude_none=True, exclude={"once_per_month_override"}).items():
         setattr(txn, field, value)
@@ -259,6 +260,12 @@ async def update_transaction(
         raise HTTPException(
             status_code=400,
             detail="Cannot change transaction type to/from transfer; delete and recreate instead.",
+        )
+
+    if old_account_id != txn.account_id and txn.paired_transaction_id is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot move a transfer transaction between accounts; delete and recreate instead.",
         )
 
     await _check_once_per_month_transaction(txn.category_id, txn.date, db, exclude_txn_id=txn.id, override=override)
@@ -291,11 +298,17 @@ async def update_transaction(
             dest_txn.category_id = txn.category_id
 
     else:
-        balance_delta = _signed_effect(txn.type, txn.amount) - _signed_effect(old_type, old_amount)
-        if balance_delta != 0:
-            account = await db.get(Account, txn.account_id)
-            if account:
-                account.current_balance += balance_delta
+        old_effect = _signed_effect(old_type, old_amount)
+        new_effect = _signed_effect(txn.type, txn.amount)
+        old_account = await db.get(Account, old_account_id)
+        if old_account:
+            old_account.current_balance -= old_effect
+        if old_account_id == txn.account_id:
+            new_account = old_account
+        else:
+            new_account = await db.get(Account, txn.account_id)
+        if new_account:
+            new_account.current_balance += new_effect
 
     # If the transaction had no recurring link and the edit might now make it match, re-check
     if not had_recurring and txn.recurring_item_id is None and override != "extra_payment":
