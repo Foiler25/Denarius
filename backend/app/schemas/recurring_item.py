@@ -31,6 +31,7 @@ class RecurringUpdate(BaseModel):
     amount: Optional[Decimal] = None
     amount_min: Optional[Decimal] = None
     amount_max: Optional[Decimal] = None
+    type: Optional[RecurringType] = None
     frequency: Optional[RecurringFrequency] = None
     day_of_month: Optional[int] = None
     next_due_date: Optional[Date] = None

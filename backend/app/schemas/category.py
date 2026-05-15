@@ -15,6 +15,7 @@ class CategoryCreate(BaseModel):
 
 class CategoryUpdate(BaseModel):
     name: Optional[str] = None
+    type: Optional[CategoryType] = None
     color: Optional[str] = None
     icon: Optional[str] = None
     sort_order: Optional[int] = None
