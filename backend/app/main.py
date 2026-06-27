@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import subprocess
 from contextlib import asynccontextmanager
@@ -7,8 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi import _rate_limit_exceeded_handler
+from sqlalchemy import text
 
 from app.config import get_settings
+from app.database import engine
 from app.rate_limit import limiter
 from app.routers import (
     auth, accounts, expense_accounts, mortgage, transactions, categories,
@@ -36,8 +39,36 @@ def run_migrations() -> None:
     logger.info("Migrations complete")
 
 
+async def wait_for_db(max_attempts: int = 30, delay_seconds: float = 2.0) -> None:
+    """Wait for Postgres to accept connections before running migrations.
+
+    A Portainer/compose restart can start this container before the database is
+    ready, which previously crash-looped the backend. Retry a trivial query with
+    backoff until the DB answers. Only connectivity is retried here — a genuine
+    migration failure still fails fast in run_migrations().
+    """
+    last_err: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("Database reachable (attempt %d).", attempt)
+            return
+        except Exception as exc:  # noqa: BLE001 - any connection failure is retryable
+            last_err = exc
+            logger.warning(
+                "Database not ready (attempt %d/%d): %s; retrying in %.1fs",
+                attempt, max_attempts, exc, delay_seconds,
+            )
+            await asyncio.sleep(delay_seconds)
+    raise RuntimeError(
+        f"Database unreachable after {max_attempts} attempts"
+    ) from last_err
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await wait_for_db()
     run_migrations()
     await start_scheduler()
     yield
